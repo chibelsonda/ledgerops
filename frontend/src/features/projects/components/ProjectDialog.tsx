@@ -4,11 +4,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { BriefcaseBusiness, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { Button } from '../../../shared/ui/Button'
-import { Input, Select } from '../../../shared/ui/FormControls'
-import { projectsApi } from '../api'
-import { projectFormSchema, toMinor, type ProjectFormValues } from '../schema'
-import type { ClientOption, CreateProjectInput } from '../types'
+import { Button } from '@/shared/ui/Button'
+import { Input, Select } from '@/shared/ui/FormControls'
+import { projectsApi } from '@/features/projects/api'
+import { projectFormSchema, toMinor, type ProjectFormValues } from '@/features/projects/schema'
+import type { ClientOption, CreateProjectInput } from '@/features/projects/types'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const defaults = (): ProjectFormValues => ({ clientId: '', projectCode: '', name: '', currencyCode: 'USD', startOn: today(), endOn: '', contractNumber: '', contractTitle: '', originalValue: 0 })

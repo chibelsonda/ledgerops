@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { subscribeToToasts, type ToastEventDetail } from '../lib/toast'
+import { subscribeToToasts, type ToastEventDetail } from '@/shared/lib/toast'
 
 interface ToastMessage extends ToastEventDetail {
   id: number

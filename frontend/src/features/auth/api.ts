@@ -1,4 +1,4 @@
-import { apiRequest, setCSRFToken } from '../../shared/api/http'
+import { apiRequest, setCSRFToken } from '@/shared/api/http'
 import type { LoginCredentials, Session } from './types'
 
 function rememberCSRF(session: Session) {

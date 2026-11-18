@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Banknote, CircleDollarSign, Clock3, ReceiptText, TrendingUp } from 'lucide-react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { formatMoney } from '../../shared/lib/format'
-import { PageHeader } from '../../shared/ui/PageHeader'
-import { ErrorState, LoadingState } from '../../shared/ui/ViewState'
+import { formatMoney } from '@/shared/lib/format'
+import { PageHeader } from '@/shared/ui/PageHeader'
+import { ErrorState, LoadingState } from '@/shared/ui/ViewState'
 import { dashboardApi } from './api'
 import { MetricCard } from './components/MetricCard'
 

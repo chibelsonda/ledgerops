@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { BriefcaseBusiness, CalendarCheck, ChartLine, ChartNoAxesCombined, ChevronDown, ChevronLeft, ChevronRight, FileText, LogOut, MailCheck, Menu as MenuIcon, RefreshCw, ScanSearch, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { dashboardApi } from '../features/dashboard/api'
-import { useAuth } from '../features/auth/AuthProvider'
-import type { Role } from '../features/auth/types'
-import { titleCase } from '../shared/lib/format'
-import { LedgerOpsMark } from '../shared/ui/LedgerOpsMark'
+import { dashboardApi } from '@/features/dashboard/api'
+import { useAuth } from '@/features/auth/AuthProvider'
+import type { Role } from '@/features/auth/types'
+import { titleCase } from '@/shared/lib/format'
+import { LedgerOpsMark } from '@/shared/ui/LedgerOpsMark'
 
 const navigation = [
   { to: '/', label: 'Overview', icon: ChartNoAxesCombined, end: true, roles: ['admin', 'controller', 'reviewer'] as Role[] },

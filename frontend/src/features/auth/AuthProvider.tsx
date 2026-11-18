@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useCallback, useContext, useEffect } from 'react'
-import { ApiError, setCSRFToken } from '../../shared/api/http'
+import { ApiError, setCSRFToken } from '@/shared/api/http'
 import { authApi } from './api'
 import type { LoginCredentials, Session } from './types'
 

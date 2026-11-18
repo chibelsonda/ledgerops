@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { CloseDecisionInput, CloseDetail, ClosePeriodSummary, CreateClosePeriodInput, UpdateCloseTaskInput } from './types'
 
 export const closeApi = {

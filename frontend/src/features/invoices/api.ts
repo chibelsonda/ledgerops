@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { ClientOption, Invoice, InvoiceAuditEvent, InvoiceFilters, InvoiceMutationInput, InvoicePage, Payment, PaymentInput, PaymentResult } from './types'
 
 function listPath(filters: InvoiceFilters) {

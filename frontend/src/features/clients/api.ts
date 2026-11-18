@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { Client, ClientInput, ClientPage, Contact, ContactInput } from './types'
 
 export const clientsApi = {

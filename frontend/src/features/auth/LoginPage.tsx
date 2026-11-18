@@ -1,9 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LockKeyhole, ShieldCheck } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { Button } from '../../shared/ui/Button'
-import { Input } from '../../shared/ui/FormControls'
-import { LedgerOpsMark } from '../../shared/ui/LedgerOpsMark'
+import { Button } from '@/shared/ui/Button'
+import { Input } from '@/shared/ui/FormControls'
+import { LedgerOpsMark } from '@/shared/ui/LedgerOpsMark'
 import { useAuth } from './AuthProvider'
 import { loginSchema, type LoginFormValues } from './schema'
 

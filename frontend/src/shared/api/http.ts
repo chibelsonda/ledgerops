@@ -1,4 +1,4 @@
-import { emitToast } from '../lib/toast'
+import { emitToast } from '@/shared/lib/toast'
 
 let csrfToken = ''
 

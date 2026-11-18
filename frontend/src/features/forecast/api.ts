@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { AdjustmentInput, CashFlowForecast, ForecastScenario, ScenarioInput } from './types'
 
 export const forecastApi = {

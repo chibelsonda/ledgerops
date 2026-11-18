@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { DeliveryStatus, Reminder } from './types'
 export const remindersApi = {
   list: async () => (await apiRequest<{ items: Reminder[] }>('/api/v1/reminders')).items,

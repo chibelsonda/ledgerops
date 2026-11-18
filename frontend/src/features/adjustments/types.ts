@@ -1,4 +1,4 @@
-import type { Invoice } from '../invoices/types'
+import type { Invoice } from '@/features/invoices/types'
 
 export type AdjustmentKind = 'credit_note' | 'payment_reversal'
 export type AdjustmentStatus = 'pending' | 'approved' | 'rejected'

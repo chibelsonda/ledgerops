@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { subscribeToToasts, type ToastEventDetail } from '../lib/toast'
+import { subscribeToToasts, type ToastEventDetail } from '@/shared/lib/toast'
 import { ApiError, apiRequest } from './http'
 
 afterEach(() => {

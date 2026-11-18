@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { QuickBooksAuthorization, QuickBooksConnection, SyncRun } from './types'
 
 export const syncApi = {

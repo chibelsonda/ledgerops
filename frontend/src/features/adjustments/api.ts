@@ -1,4 +1,4 @@
-import { apiRequest } from '../../shared/api/http'
+import { apiRequest } from '@/shared/api/http'
 import type { Adjustment, AdjustmentDecisionInput, AdjustmentDecisionResult, CreateAdjustmentInput } from './types'
 
 export const adjustmentsApi = {
