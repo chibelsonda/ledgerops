@@ -6,7 +6,53 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
+
+const (
+	testOrganizationID = "11111111-1111-4111-8111-111111111111"
+	testUserID         = "81111111-1111-7111-8111-111111111111"
+)
+
+func TestAuthenticatedPrincipalReturnsTenantFromContext(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/invoices", nil)
+	want := identity.Principal{OrganizationID: testOrganizationID, UserID: testUserID, Email: "controller@ledgerops.demo"}
+	request = request.WithContext(identity.WithPrincipal(request.Context(), want))
+	response := httptest.NewRecorder()
+
+	got, ok := AuthenticatedPrincipal(response, request)
+	if !ok {
+		t.Fatalf("principal was rejected; status = %d", response.Code)
+	}
+	if got != want {
+		t.Fatalf("principal = %#v, want %#v", got, want)
+	}
+}
+
+func TestAuthenticatedPrincipalRejectsIncompleteTenantIdentity(t *testing.T) {
+	tests := map[string]identity.Principal{
+		"missing principal":    {},
+		"invalid organization": {OrganizationID: "not-a-uuid", UserID: testUserID},
+		"invalid user":         {OrganizationID: testOrganizationID, UserID: "not-a-uuid"},
+	}
+	for name, principal := range tests {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/invoices", nil)
+			if name != "missing principal" {
+				request = request.WithContext(identity.WithPrincipal(request.Context(), principal))
+			}
+			response := httptest.NewRecorder()
+
+			if _, ok := AuthenticatedPrincipal(response, request); ok {
+				t.Fatal("invalid principal was accepted")
+			}
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
 
 func TestWrapAddsSecurityAndNoStoreHeaders(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))

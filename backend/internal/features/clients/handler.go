@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
 
 type ClientService interface {
@@ -31,7 +30,7 @@ func NewHandler(service ClientService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -49,7 +48,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -70,7 +69,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -96,7 +95,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -114,7 +113,7 @@ func (h *Handler) ListContacts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -140,7 +139,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
-	principal, ok := requestPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -185,15 +184,6 @@ func parseListParams(r *http.Request) (ListParams, string) {
 		params.PageSize = value
 	}
 	return params, ""
-}
-
-func requestPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	principal, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(principal.OrganizationID) || !httpx.ValidUUID(principal.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return principal, true
 }
 
 func clientValidationError(w http.ResponseWriter, err error) bool {

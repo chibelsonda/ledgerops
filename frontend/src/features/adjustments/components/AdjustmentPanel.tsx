@@ -122,7 +122,7 @@ export function AdjustmentPanel({ invoice, onInvoiceChanged }: AdjustmentPanelPr
 
       {invoice.status !== 'draft' && invoice.status !== 'void' ? (
         <form className="adjustment-form" onSubmit={createForm.handleSubmit((values) => createAdjustment.mutate(values))} noValidate>
-          <Select label="Adjustment type" {...createForm.register('kind')}>
+          <Select label="Adjustment type" error={createForm.formState.errors.kind?.message} {...createForm.register('kind')}>
             <option value="credit_note">Credit note</option>
             <option value="payment_reversal">Payment reversal</option>
           </Select>

@@ -29,7 +29,7 @@ func NewHandler(service CloseService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -42,7 +42,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -59,7 +59,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -79,7 +79,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -103,7 +103,7 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -120,7 +120,7 @@ func (h *Handler) Submit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
-	p, ok := principal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -143,14 +143,6 @@ func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
-func principal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	p, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(p.OrganizationID) || !httpx.ValidUUID(p.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return p, true
-}
 func actor(p identity.Principal) Actor { return Actor{UserID: p.UserID, Email: p.Email} }
 func pathID(w http.ResponseWriter, r *http.Request, name, label string) (string, bool) {
 	id := r.PathValue(name)

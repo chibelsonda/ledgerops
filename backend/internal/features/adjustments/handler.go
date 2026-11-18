@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
 
 type AdjustmentService interface {
@@ -26,7 +25,7 @@ func NewHandler(service AdjustmentService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -44,7 +43,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -70,7 +69,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
-	principal, ok := principal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -102,13 +101,4 @@ func writeValidationError(w http.ResponseWriter, code string, err error) bool {
 	}
 	httpx.WriteError(w, http.StatusUnprocessableEntity, code, validation.Message)
 	return true
-}
-
-func principal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	value, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(value.OrganizationID) || !httpx.ValidUUID(value.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return value, true
 }

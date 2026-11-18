@@ -17,22 +17,29 @@ import (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-57][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$`)
 
-func OrganizationID(w http.ResponseWriter, r *http.Request) (string, bool) {
+func AuthenticatedPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
 	principal, ok := identity.FromContext(r.Context())
-	if !ok {
+	if !ok || !ValidPrincipal(principal) {
 		WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
+		return identity.Principal{}, false
+	}
+	return principal, true
+}
+
+func OrganizationID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	principal, ok := AuthenticatedPrincipal(w, r)
+	if !ok {
 		return "", false
 	}
-	value := principal.OrganizationID
-	if !uuidPattern.MatchString(value) {
-		WriteError(w, http.StatusBadRequest, "invalid_organization_id", "The organization ID is invalid.")
-		return "", false
-	}
-	return value, true
+	return principal.OrganizationID, true
 }
 
 func ValidUUID(value string) bool {
 	return uuidPattern.MatchString(value)
+}
+
+func ValidPrincipal(principal identity.Principal) bool {
+	return ValidUUID(principal.OrganizationID) && ValidUUID(principal.UserID)
 }
 
 func DecodeJSON(w http.ResponseWriter, r *http.Request, destination any, maxBytes int64) error {

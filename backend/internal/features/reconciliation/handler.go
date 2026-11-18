@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
 
 type ReconciliationService interface {
@@ -38,7 +37,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
-	organizationID, ok := httpx.OrganizationID(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -52,8 +51,7 @@ func (h *Handler) Resolve(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Provide a JSON body with a resolution note.")
 		return
 	}
-	principal, _ := identity.FromContext(r.Context())
-	if err := h.service.Resolve(r.Context(), organizationID, itemID, principal.Email, request.Note); err != nil {
+	if err := h.service.Resolve(r.Context(), principal.OrganizationID, itemID, principal.Email, request.Note); err != nil {
 		if errors.Is(err, ErrInvalidResolution) {
 			httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_note", "The resolution note must contain 3 to 500 characters.")
 			return

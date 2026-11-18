@@ -32,7 +32,7 @@ func NewHandler(service ProjectService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -45,7 +45,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -58,7 +58,7 @@ func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -105,7 +105,7 @@ func (h *Handler) DecideChangeOrder(w http.ResponseWriter, r *http.Request) {
 type decisionUseCase func(context.Context, string, string, Actor, DecisionInput) (Detail, error)
 
 func (h *Handler) decide(w http.ResponseWriter, r *http.Request, pathName, label string, useCase decisionUseCase) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -129,7 +129,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, pathName, label
 }
 
 func (h *Handler) CreateChangeOrder(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -153,7 +153,7 @@ func (h *Handler) CreateChangeOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateMilestone(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -177,7 +177,7 @@ func (h *Handler) CreateMilestone(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) InvoiceMilestone(w http.ResponseWriter, r *http.Request) {
-	principal, ok := projectPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -224,15 +224,6 @@ func projectPathID(w http.ResponseWriter, r *http.Request, name, label string) (
 		return "", false
 	}
 	return id, true
-}
-
-func projectPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	principal, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(principal.OrganizationID) || !httpx.ValidUUID(principal.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return principal, true
 }
 
 func projectActor(principal identity.Principal) Actor {

@@ -27,7 +27,7 @@ func NewHandler(service ForecastService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) ListScenarios(w http.ResponseWriter, r *http.Request) {
-	p, ok := forecastPrincipal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -39,7 +39,7 @@ func (h *Handler) ListScenarios(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	p, ok := forecastPrincipal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -55,7 +55,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, result)
 }
 func (h *Handler) CreateScenario(w http.ResponseWriter, r *http.Request) {
-	p, ok := forecastPrincipal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -74,7 +74,7 @@ func (h *Handler) CreateScenario(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, result)
 }
 func (h *Handler) AddAdjustment(w http.ResponseWriter, r *http.Request) {
-	p, ok := forecastPrincipal(w, r)
+	p, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -97,14 +97,6 @@ func (h *Handler) AddAdjustment(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, result)
 }
 
-func forecastPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	p, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(p.OrganizationID) || !httpx.ValidUUID(p.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return p, true
-}
 func forecastActor(p identity.Principal) Actor { return Actor{UserID: p.UserID, Email: p.Email} }
 func forecastID(w http.ResponseWriter, r *http.Request, name, label string) (string, bool) {
 	id := r.PathValue(name)

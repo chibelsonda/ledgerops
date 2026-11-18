@@ -45,6 +45,11 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 			httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
 			return
 		}
+		if !httpx.ValidPrincipal(principal) {
+			m.logger.Error("authenticated session has invalid tenant identity", "user_id", principal.UserID, "organization_id", principal.OrganizationID)
+			httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(identity.WithPrincipal(r.Context(), principal)))
 	})
 }

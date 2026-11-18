@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
 
 type InvoiceService interface {
@@ -144,7 +143,7 @@ func (h *Handler) ListPayments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RecordPayment(w http.ResponseWriter, r *http.Request) {
-	principal, ok := authenticatedPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -224,18 +223,9 @@ func writeValidationError(w http.ResponseWriter, code string, err error) bool {
 }
 
 func requestIdentity(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	principal, ok := authenticatedPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return "", "", false
 	}
 	return principal.OrganizationID, principal.Email, true
-}
-
-func authenticatedPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	principal, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(principal.OrganizationID) || !httpx.ValidUUID(principal.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return principal, true
 }

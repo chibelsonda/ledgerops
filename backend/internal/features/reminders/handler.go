@@ -9,7 +9,6 @@ import (
 	"net/http"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
 
 type ReminderService interface {
@@ -31,7 +30,7 @@ func NewHandler(service ReminderService, logger *slog.Logger, status DeliverySta
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
-	principal, ok := reminderPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -44,7 +43,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeliveryStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := reminderPrincipal(w, r); !ok {
+	if _, ok := httpx.AuthenticatedPrincipal(w, r); !ok {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, h.status)
@@ -82,7 +81,7 @@ func sameSecret(provided, expected string) bool {
 }
 
 func (h *Handler) Generate(w http.ResponseWriter, r *http.Request) {
-	principal, ok := reminderPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -95,7 +94,7 @@ func (h *Handler) Generate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
-	principal, ok := reminderPrincipal(w, r)
+	principal, ok := httpx.AuthenticatedPrincipal(w, r)
 	if !ok {
 		return
 	}
@@ -109,13 +108,4 @@ func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func reminderPrincipal(w http.ResponseWriter, r *http.Request) (identity.Principal, bool) {
-	p, ok := identity.FromContext(r.Context())
-	if !ok || !httpx.ValidUUID(p.OrganizationID) || !httpx.ValidUUID(p.UserID) {
-		httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
-		return identity.Principal{}, false
-	}
-	return p, true
 }

@@ -21,7 +21,7 @@ func (disconnectedRepository) Enqueue(context.Context, string) (Run, error) {
 func TestEnqueueRequiresQuickBooksConnection(t *testing.T) {
 	handler := NewHandler(NewService(disconnectedRepository{}), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/sync-runs", nil)
-	request = request.WithContext(identity.WithPrincipal(request.Context(), identity.Principal{OrganizationID: "11111111-1111-4111-8111-111111111111"}))
+	request = request.WithContext(identity.WithPrincipal(request.Context(), identity.Principal{OrganizationID: "11111111-1111-4111-8111-111111111111", UserID: "81111111-1111-7111-8111-111111111111"}))
 	response := httptest.NewRecorder()
 
 	handler.Enqueue(response, request)

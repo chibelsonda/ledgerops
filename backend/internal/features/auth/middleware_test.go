@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,37 @@ import (
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
+
+type staticRequestAuthenticator struct {
+	principal identity.Principal
+}
+
+func (a staticRequestAuthenticator) Authenticate(context.Context, string, string, bool) (identity.Principal, error) {
+	return a.principal, nil
+}
+
+func TestAuthenticateRejectsInvalidTenantIdentityBeforeProtectedHandler(t *testing.T) {
+	called := false
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	middleware := NewMiddleware(staticRequestAuthenticator{principal: identity.Principal{
+		OrganizationID: "not-a-uuid",
+		UserID:         "81111111-1111-7111-8111-111111111111",
+		Role:           identity.RoleController,
+	}}, logger)
+	handler := middleware.Authenticate(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/invoices", nil)
+	request.AddCookie(&http.Cookie{Name: CookieName, Value: "session-token"})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", response.Code)
+	}
+	if called {
+		t.Fatal("protected handler was called with an invalid tenant identity")
+	}
+}
 
 func TestRequireRolesRejectsReviewer(t *testing.T) {
 	called := false
