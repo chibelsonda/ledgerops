@@ -27,6 +27,10 @@ func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("validate configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -42,7 +46,20 @@ func main() {
 		}
 	}()
 
-	if err := database.Migrate(ctx, db); err != nil {
+	migrationDB := db
+	if cfg.MigrationDatabaseURL != "" && cfg.MigrationDatabaseURL != cfg.DatabaseURL {
+		migrationDB, err = database.Open(ctx, cfg.MigrationDatabaseURL)
+		if err != nil {
+			logger.Error("connect to migration database", "error", err)
+			os.Exit(1)
+		}
+		defer func() {
+			if err := database.Close(migrationDB); err != nil {
+				logger.Error("close migration database", "error", err)
+			}
+		}()
+	}
+	if err := database.Migrate(ctx, migrationDB); err != nil {
 		logger.Error("run migrations", "error", err)
 		os.Exit(1)
 	}
@@ -66,6 +83,7 @@ func main() {
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    32 << 10,
 	}
 
 	go func() {

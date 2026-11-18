@@ -12,6 +12,8 @@ LedgerOps is a production-shaped FinOps portfolio project: a Go and PostgreSQL b
 - Financial summaries, A/R aging, and budget-to-actual reporting
 - Client contacts, payment terms, and automated overdue-reminder policies
 - Project contracts, controlled change orders, milestone billing, and two-person approvals
+- Month-end close periods with evidence-backed checklists, independent sign-off, and immutable locks
+- Explainable 13-week cash forecasting with scenarios, invoice and project receipts, operating run-rate, and append-only adjustments
 - SMTP reminder delivery with bounded retries and webhook delivery tracking
 - PostgreSQL-backed background jobs with idempotency and retry state
 - Reconciliation decisions coupled transactionally to audit events
@@ -38,12 +40,13 @@ The default connection uses the PostgreSQL Unix socket and current operating-sys
 Run each process in its own terminal:
 
 ```bash
+cp .env.example .env
 make api
 make worker
 make web
 ```
 
-Open <http://localhost:5173>. The API health endpoint is <http://localhost:8080/healthz>. The API applies embedded migrations and idempotent demo seed data on startup. Use the controller demo account shown on the login screen:
+Open <http://localhost:5173>. The API health endpoint is <http://localhost:8080/healthz>. With the local `.env.example` settings, the API applies embedded migrations and idempotent demo seed data on startup. Use the local-only controller demo account:
 
 ```text
 mara@ledgerops.demo
@@ -53,6 +56,8 @@ LedgerOpsDemo!2026
 To connect a real QuickBooks Online sandbox, add the development credentials and a stable token-encryption key described in [the integration runbook](docs/integration-runbook.md), restart the API, and choose **Data sync → Connect QuickBooks**.
 
 To deliver collection reminders, set `SMTP_HOST`, `SMTP_PORT`, and `EMAIL_FROM_ADDRESS` in `ledgerops/.env` (plus credentials when required), then restart the worker. Set `EMAIL_WEBHOOK_SECRET` on the API and on the trusted email relay that posts normalized delivery events to `POST /api/v1/integrations/email/webhook`. If SMTP is omitted, reminders remain queued and are never reported as sent.
+
+Production startup is fail-closed: set `APP_ENV=production`, HTTPS origins, secure cookies, TLS-enabled non-demo database credentials, and disable demo seeding. See [Security and production hardening](docs/security.md).
 
 ## Test it
 
@@ -73,7 +78,7 @@ backend/
   cmd/worker/          background sync process
   internal/app/        route composition
   internal/database/   connection, embedded migrations, demo seed
-  internal/features/   dashboard, projects, invoices, clients, reminders, reconciliation, and sync slices
+  internal/features/   dashboard, close, forecast, projects, invoices, clients, reminders, reconciliation, and sync slices
   internal/financial/  pure financial rules
   internal/jobs/       queue orchestration
   internal/platform/   shared HTTP and application error infrastructure
@@ -98,3 +103,5 @@ The included accounts demonstrate `admin`, `controller`, and `reviewer` workspac
 - [QuickBooks incident runbook](docs/integration-runbook.md)
 - [Email delivery runbook](docs/email-delivery.md)
 - [Authentication and role model](docs/authentication.md)
+- [Security and production hardening](docs/security.md)
+- [Financial controls and forecasting methodology](docs/financial-controls.md)

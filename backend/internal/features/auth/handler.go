@@ -35,10 +35,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	session, token, err := h.service.Login(r.Context(), request)
 	if err != nil {
+		h.logger.Warn("security login failed", "remote_addr", r.RemoteAddr, "reason", authErrorCode(err))
 		handleAuthError(w, h.logger, "log in", err)
 		return
 	}
 	h.setCookie(w, token, session.ExpiresAt)
+	h.logger.Info("security login succeeded", "remote_addr", r.RemoteAddr, "user_id", session.User.UserID, "organization_id", session.User.OrganizationID)
 	httpx.WriteJSON(w, http.StatusOK, session)
 }
 
@@ -51,6 +53,7 @@ func (h *Handler) Session(w http.ResponseWriter, r *http.Request) {
 	session, err := h.service.RefreshSession(r.Context(), cookie.Value)
 	if err != nil {
 		h.clearCookie(w)
+		h.logger.Warn("security session refresh failed", "remote_addr", r.RemoteAddr, "reason", authErrorCode(err))
 		handleAuthError(w, h.logger, "refresh session", err)
 		return
 	}
@@ -65,6 +68,8 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.clearCookie(w)
+	w.Header().Set("Clear-Site-Data", `"cache", "cookies", "storage"`)
+	h.logger.Info("security logout completed", "remote_addr", r.RemoteAddr)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -106,5 +111,20 @@ func handleAuthError(w http.ResponseWriter, logger *slog.Logger, operation strin
 	default:
 		logger.Error(operation, "error", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal_error", "The request could not be completed.")
+	}
+}
+
+func authErrorCode(err error) string {
+	switch {
+	case errors.Is(err, ErrInvalidLogin):
+		return "invalid_login"
+	case errors.Is(err, ErrInvalidCredentials):
+		return "invalid_credentials"
+	case errors.Is(err, ErrUnauthenticated):
+		return "unauthenticated"
+	case errors.Is(err, ErrInvalidCSRF):
+		return "invalid_csrf"
+	default:
+		return "internal_error"
 	}
 }

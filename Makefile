@@ -7,10 +7,10 @@ db-create:
 	createdb ledgerops
 
 api:
-	go -C backend run ./cmd/api
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; go -C backend run ./cmd/api
 
 worker:
-	go -C backend run ./cmd/worker
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; go -C backend run ./cmd/worker
 
 web:
 	npm --prefix frontend run dev

@@ -18,9 +18,13 @@ type fakeRepository struct {
 }
 
 func (r *fakeRepository) FindUserByEmail(context.Context, string) (*User, error) { return r.user, nil }
-func (r *fakeRepository) RecordFailedLogin(_ context.Context, _ string, attempts int, lockedUntil *time.Time) error {
-	r.failedAttempts = attempts
-	r.lockedUntil = lockedUntil
+func (r *fakeRepository) RecordFailedLogin(_ context.Context, _ string, now time.Time, maxAttempts int, lockout time.Duration) error {
+	r.failedAttempts++
+	if r.failedAttempts >= maxAttempts {
+		lockedUntil := now.Add(lockout)
+		r.lockedUntil = &lockedUntil
+		r.failedAttempts = 0
+	}
 	return nil
 }
 func (r *fakeRepository) ResetFailedLogins(context.Context, string) error { return nil }
@@ -34,14 +38,21 @@ func (r *fakeRepository) CreateSession(_ context.Context, _ string, _ string, to
 	}
 	return nil
 }
-func (r *fakeRepository) FindSession(_ context.Context, tokenHash []byte, _ time.Time) (*StoredSession, error) {
+func (r *fakeRepository) FindSession(_ context.Context, tokenHash []byte, _ time.Time, idleCutoff time.Time) (*StoredSession, error) {
 	if r.session == nil || !bytes.Equal(tokenHash, r.session.TokenHash) {
+		return nil, nil
+	}
+	if !r.session.LastSeenAt.IsZero() && !r.session.LastSeenAt.After(idleCutoff) {
 		return nil, nil
 	}
 	return r.session, nil
 }
 func (r *fakeRepository) RotateCSRF(_ context.Context, _ int64, csrfHash []byte, _ time.Time) error {
 	r.session.CSRFHash = append([]byte(nil), csrfHash...)
+	return nil
+}
+func (r *fakeRepository) TouchSession(_ context.Context, _ int64, now time.Time) error {
+	r.session.LastSeenAt = now
 	return nil
 }
 func (r *fakeRepository) RevokeSession(context.Context, []byte, time.Time) error {
@@ -79,7 +90,7 @@ func TestLoginCreatesHashedSessionAndValidatesCSRF(t *testing.T) {
 		Role:             identity.RoleController,
 		Active:           true,
 	}}
-	service, err := NewService(repository, 12*time.Hour)
+	service, err := NewService(repository, 12*time.Hour, 30*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +126,7 @@ func TestLoginRecordsFailedAttempt(t *testing.T) {
 		PasswordHash:   passwordHash,
 		Active:         true,
 	}}
-	service, err := NewService(repository, 12*time.Hour)
+	service, err := NewService(repository, 12*time.Hour, 30*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,5 +136,30 @@ func TestLoginRecordsFailedAttempt(t *testing.T) {
 	}
 	if repository.failedAttempts != 1 {
 		t.Fatalf("failed attempts = %d, want 1", repository.failedAttempts)
+	}
+}
+
+func TestAuthenticateRejectsIdleSession(t *testing.T) {
+	passwordHash, err := HashPassword("LedgerOpsDemo!2026")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &fakeRepository{user: &User{
+		ID: "82222222-2222-7222-8222-222222222222", OrganizationID: "11111111-1111-4111-8111-111111111111",
+		Email: "mara@ledgerops.demo", PasswordHash: passwordHash, Active: true,
+	}}
+	service, err := NewService(repository, 12*time.Hour, 30*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, time.November, 18, 12, 0, 0, 0, time.UTC)
+	service.now = func() time.Time { return now }
+	session, token, err := service.Login(context.Background(), LoginRequest{Email: repository.user.Email, Password: "LedgerOpsDemo!2026"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository.session.LastSeenAt = now.Add(-31 * time.Minute)
+	if _, err := service.Authenticate(context.Background(), token, session.CSRFToken, true); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("error = %v, want ErrUnauthenticated", err)
 	}
 }

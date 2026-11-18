@@ -88,7 +88,7 @@ func HealthHandler(check HealthCheck, logger *slog.Logger) http.HandlerFunc {
 }
 
 func Wrap(next http.Handler, logger *slog.Logger, allowedOrigin string) http.Handler {
-	return recoverPanic(securityHeaders(cors(requestLog(next, logger), allowedOrigin)), logger)
+	return requestLog(recoverPanic(securityHeaders(cors(next, allowedOrigin)), logger), logger)
 }
 
 type statusRecorder struct {
@@ -114,9 +114,14 @@ func requestLog(next http.Handler, logger *slog.Logger) http.Handler {
 
 func cors(next http.Handler, allowedOrigin string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Origin") == allowedOrigin {
+		origin := r.Header.Get("Origin")
+		w.Header().Add("Vary", "Origin")
+		if origin != "" && origin != allowedOrigin {
+			WriteError(w, http.StatusForbidden, "origin_not_allowed", "The request origin is not allowed.")
+			return
+		}
+		if origin == allowedOrigin {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
@@ -134,6 +139,16 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-site")
+		if r.URL.Path == "/api" || len(r.URL.Path) > 5 && r.URL.Path[:5] == "/api/" {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Pragma", "no-cache")
+		}
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

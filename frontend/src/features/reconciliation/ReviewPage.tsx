@@ -41,7 +41,7 @@ export function ReviewPage() {
   const resolvedItems = data.filter((item) => item.status === 'resolved')
   return (
     <div className="page">
-      <PageHeader eyebrow="Month-end close" title="Review queue" description="Investigate exceptions, document the decision, and leave a complete audit trail." />
+      <PageHeader eyebrow="Financial controls" title="Review queue" description="Investigate exceptions, document the decision, and leave a complete audit trail." />
       <div className="review-layout">
         <section className="panel review-list">
           <div className="panel-heading"><div><span className="eyebrow">Needs attention</span><h2>{openItems.length} open items</h2></div></div>

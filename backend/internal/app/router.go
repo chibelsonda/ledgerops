@@ -10,7 +10,9 @@ import (
 	"github.com/portfolio/ledgerops/backend/internal/features/adjustments"
 	"github.com/portfolio/ledgerops/backend/internal/features/auth"
 	"github.com/portfolio/ledgerops/backend/internal/features/clients"
+	closefeature "github.com/portfolio/ledgerops/backend/internal/features/close"
 	"github.com/portfolio/ledgerops/backend/internal/features/dashboard"
+	"github.com/portfolio/ledgerops/backend/internal/features/forecast"
 	"github.com/portfolio/ledgerops/backend/internal/features/integrations/quickbooks"
 	"github.com/portfolio/ledgerops/backend/internal/features/invoices"
 	"github.com/portfolio/ledgerops/backend/internal/features/projects"
@@ -25,12 +27,20 @@ import (
 func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
-	authService, err := auth.NewService(auth.NewPostgresRepository(db), cfg.Auth.SessionTTL)
+	authService, err := auth.NewService(auth.NewPostgresRepository(db), cfg.Auth.SessionTTL, cfg.Auth.SessionIdleTTL)
 	if err != nil {
 		return nil, fmt.Errorf("configure authentication: %w", err)
 	}
 	authHandler := auth.NewHandler(authService, logger, cfg.Auth.CookieSecure, cfg.Auth.SessionTTL)
 	authMiddleware := auth.NewMiddleware(authService, logger)
+	clientIP, err := httpx.NewClientIPResolver(cfg.RateLimit.TrustedProxyCIDRs)
+	if err != nil {
+		return nil, fmt.Errorf("configure trusted proxies: %w", err)
+	}
+	globalLimiter := httpx.NewRateLimiter(cfg.RateLimit.Requests, cfg.RateLimit.Window, "global_ip", logger)
+	loginLimiter := httpx.NewRateLimiter(cfg.RateLimit.LoginRequests, cfg.RateLimit.LoginWindow, "login_ip", logger)
+	sensitiveLimiter := httpx.NewRateLimiter(cfg.RateLimit.SensitiveRequests, cfg.RateLimit.SensitiveWindow, "sensitive_ip", logger)
+	userLimiter := httpx.NewRateLimiter(cfg.RateLimit.Requests, cfg.RateLimit.Window, "authenticated_user", logger)
 	dashboardRepository := dashboard.NewPostgresRepository(db)
 	dashboardHandler := dashboard.NewHandler(dashboard.NewService(dashboardRepository), logger)
 	invoicesRepository := invoices.NewPostgresRepository(db)
@@ -43,6 +53,10 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	syncHandler := sync.NewHandler(sync.NewService(syncRepository), logger)
 	clientsRepository := clients.NewPostgresRepository(db)
 	clientsHandler := clients.NewHandler(clients.NewService(clientsRepository), logger)
+	closeRepository := closefeature.NewPostgresRepository(db)
+	closeHandler := closefeature.NewHandler(closefeature.NewService(closeRepository), logger)
+	forecastRepository := forecast.NewPostgresRepository(db)
+	forecastHandler := forecast.NewHandler(forecast.NewService(forecastRepository), logger)
 	projectsRepository := projects.NewPostgresRepository(db)
 	projectsHandler := projects.NewHandler(projects.NewService(projectsRepository), logger)
 	remindersRepository := reminders.NewPostgresRepository(db)
@@ -79,14 +93,15 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 		}
 		return sqlDB.PingContext(ctx)
 	}, logger))
-	mux.HandleFunc("POST /api/v1/auth/login", authHandler.Login)
+	mux.Handle("POST /api/v1/auth/login", loginLimiter.Middleware(http.HandlerFunc(authHandler.Login), clientIP.Key))
 	mux.HandleFunc("GET /api/v1/auth/session", authHandler.Session)
-	mux.HandleFunc("GET /api/v1/integrations/quickbooks/callback", quickBooksHandler.Callback)
-	mux.HandleFunc("POST /api/v1/integrations/email/webhook", remindersHandler.DeliveryWebhook)
+	mux.Handle("GET /api/v1/integrations/quickbooks/callback", sensitiveLimiter.Middleware(http.HandlerFunc(quickBooksHandler.Callback), clientIP.Key))
+	mux.Handle("POST /api/v1/integrations/email/webhook", sensitiveLimiter.Middleware(http.HandlerFunc(remindersHandler.DeliveryWebhook), clientIP.Key))
 
-	allRoles := auth.RequireRoles(identity.RoleAdmin, identity.RoleController, identity.RoleReviewer)
-	operators := auth.RequireRoles(identity.RoleAdmin, identity.RoleController)
-	admins := auth.RequireRoles(identity.RoleAdmin)
+	allRoles := auth.RequireRoles(logger, identity.RoleAdmin, identity.RoleController, identity.RoleReviewer)
+	operators := auth.RequireRoles(logger, identity.RoleAdmin, identity.RoleController)
+	admins := auth.RequireRoles(logger, identity.RoleAdmin)
+	controllers := auth.RequireRoles(logger, identity.RoleController)
 	protectedMux.Handle("GET /api/v1/dashboard", allRoles(http.HandlerFunc(dashboardHandler.Get)))
 	protectedMux.Handle("GET /api/v1/invoices", allRoles(http.HandlerFunc(invoicesHandler.List)))
 	protectedMux.Handle("GET /api/v1/invoices/clients", allRoles(http.HandlerFunc(invoicesHandler.ListClients)))
@@ -113,6 +128,16 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	protectedMux.Handle("PATCH /api/v1/change-orders/{changeOrderID}/decision", admins(http.HandlerFunc(projectsHandler.DecideChangeOrder)))
 	protectedMux.Handle("POST /api/v1/contracts/{contractID}/milestones", operators(http.HandlerFunc(projectsHandler.CreateMilestone)))
 	protectedMux.Handle("POST /api/v1/milestones/{milestoneID}/invoice", operators(http.HandlerFunc(projectsHandler.InvoiceMilestone)))
+	protectedMux.Handle("GET /api/v1/close-periods", allRoles(http.HandlerFunc(closeHandler.List)))
+	protectedMux.Handle("GET /api/v1/close-periods/{periodID}", allRoles(http.HandlerFunc(closeHandler.Get)))
+	protectedMux.Handle("POST /api/v1/close-periods", controllers(http.HandlerFunc(closeHandler.Create)))
+	protectedMux.Handle("PATCH /api/v1/close-tasks/{taskID}", operators(http.HandlerFunc(closeHandler.UpdateTask)))
+	protectedMux.Handle("POST /api/v1/close-periods/{periodID}/submit", operators(http.HandlerFunc(closeHandler.Submit)))
+	protectedMux.Handle("PATCH /api/v1/close-periods/{periodID}/decision", admins(http.HandlerFunc(closeHandler.Decide)))
+	protectedMux.Handle("GET /api/v1/cash-flow/scenarios", allRoles(http.HandlerFunc(forecastHandler.ListScenarios)))
+	protectedMux.Handle("GET /api/v1/cash-flow/scenarios/{scenarioID}", allRoles(http.HandlerFunc(forecastHandler.Get)))
+	protectedMux.Handle("POST /api/v1/cash-flow/scenarios", operators(http.HandlerFunc(forecastHandler.CreateScenario)))
+	protectedMux.Handle("POST /api/v1/cash-flow/scenarios/{scenarioID}/adjustments", operators(http.HandlerFunc(forecastHandler.AddAdjustment)))
 	protectedMux.Handle("GET /api/v1/reminders", allRoles(http.HandlerFunc(remindersHandler.List)))
 	protectedMux.Handle("GET /api/v1/reminders/delivery-status", allRoles(http.HandlerFunc(remindersHandler.DeliveryStatus)))
 	protectedMux.Handle("POST /api/v1/reminders/generate", operators(http.HandlerFunc(remindersHandler.Generate)))
@@ -125,7 +150,7 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	protectedMux.Handle("POST /api/v1/integrations/quickbooks/connect", admins(http.HandlerFunc(quickBooksHandler.Connect)))
 	protectedMux.Handle("DELETE /api/v1/integrations/quickbooks", admins(http.HandlerFunc(quickBooksHandler.Disconnect)))
 	protectedMux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
-	mux.Handle("/api/v1/", authMiddleware.Authenticate(protectedMux))
+	mux.Handle("/api/v1/", authMiddleware.Authenticate(userLimiter.Middleware(protectedMux, httpx.PrincipalRateLimitKey)))
 
-	return httpx.Wrap(mux, logger, cfg.AllowedOrigin), nil
+	return httpx.Wrap(globalLimiter.Middleware(mux, clientIP.Key), logger, cfg.AllowedOrigin), nil
 }

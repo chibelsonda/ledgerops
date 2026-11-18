@@ -1,21 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { CircleDollarSign, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
+import { LockKeyhole, ShieldCheck } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Button } from '../../shared/ui/Button'
 import { Input } from '../../shared/ui/FormControls'
+import { LedgerOpsMark } from '../../shared/ui/LedgerOpsMark'
 import { useAuth } from './AuthProvider'
 import { loginSchema, type LoginFormValues } from './schema'
 
-const demoCredentials: LoginFormValues = {
-  email: 'mara@ledgerops.demo',
-  password: 'LedgerOpsDemo!2026',
-}
-
 export function LoginPage() {
   const { login } = useAuth()
-  const { register, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
+  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: demoCredentials.email, password: '' },
+    defaultValues: { email: '', password: '' },
   })
 
   const submit = handleSubmit(async (values) => {
@@ -29,7 +25,7 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-story" aria-label="LedgerOps introduction">
-        <div className="login-brand"><span className="brand-mark"><CircleDollarSign size={24} /></span><span>LedgerOps</span></div>
+        <div className="login-brand"><span className="brand-mark"><LedgerOpsMark /></span><span>LedgerOps</span></div>
         <div>
           <span className="eyebrow">Financial command center</span>
           <h1>Decisions start with numbers you can trust.</h1>
@@ -41,7 +37,7 @@ export function LoginPage() {
         <div className="login-card">
           <span className="eyebrow">Welcome back</span>
           <h2>Sign in to LedgerOps</h2>
-          <p>Use the controller demo account or another assigned workspace account.</p>
+          <p>Use your assigned workspace account.</p>
           <form onSubmit={submit} className="login-form" noValidate>
             <Input label="Email address" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
             <Input label="Password" type="password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
@@ -51,10 +47,6 @@ export function LoginPage() {
               {isSubmitting ? 'Signing in' : 'Sign in securely'}
             </Button>
           </form>
-          <div className="demo-access">
-            <div><Mail size={15} /><span><strong>Controller demo</strong><small>{demoCredentials.email}</small></span></div>
-            <Button type="button" variant="ghost" onClick={() => reset(demoCredentials)}>Use demo login</Button>
-          </div>
         </div>
       </section>
     </main>

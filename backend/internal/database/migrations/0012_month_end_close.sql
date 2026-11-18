@@ -59,11 +59,18 @@ FOR EACH ROW EXECUTE FUNCTION protect_closed_period();
 CREATE OR REPLACE FUNCTION protect_close_task() RETURNS trigger AS $$
 DECLARE period_status TEXT;
 BEGIN
-    SELECT status INTO period_status FROM close_periods WHERE id = COALESCE(NEW.close_period_id, OLD.close_period_id);
+    IF TG_OP = 'DELETE' THEN
+        SELECT status INTO period_status FROM close_periods WHERE id = OLD.close_period_id;
+    ELSE
+        SELECT status INTO period_status FROM close_periods WHERE id = NEW.close_period_id;
+    END IF;
     IF period_status = 'closed' THEN
         RAISE EXCEPTION 'tasks in a closed accounting period are immutable' USING ERRCODE = '55000';
     END IF;
-    RETURN COALESCE(NEW, OLD);
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 

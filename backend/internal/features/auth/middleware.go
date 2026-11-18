@@ -34,12 +34,14 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		principal, err := m.service.Authenticate(r.Context(), cookie.Value, r.Header.Get("X-CSRF-Token"), requireCSRF)
 		if err != nil {
 			if errors.Is(err, ErrInvalidCSRF) {
+				m.logger.Warn("security CSRF validation failed", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.Path)
 				httpx.WriteError(w, http.StatusForbidden, "invalid_csrf_token", "The request could not be verified. Refresh and try again.")
 				return
 			}
 			if !errors.Is(err, ErrUnauthenticated) {
 				m.logger.Error("authenticate request", "error", err)
 			}
+			m.logger.Warn("security authentication failed", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.Path)
 			httpx.WriteError(w, http.StatusUnauthorized, "authentication_required", "Sign in to continue.")
 			return
 		}
@@ -47,7 +49,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 	})
 }
 
-func RequireRoles(roles ...identity.Role) func(http.Handler) http.Handler {
+func RequireRoles(logger *slog.Logger, roles ...identity.Role) func(http.Handler) http.Handler {
 	allowed := make(map[identity.Role]struct{}, len(roles))
 	for _, role := range roles {
 		allowed[role] = struct{}{}
@@ -60,6 +62,7 @@ func RequireRoles(roles ...identity.Role) func(http.Handler) http.Handler {
 				return
 			}
 			if _, ok := allowed[principal.Role]; !ok {
+				logger.Warn("security authorization denied", "user_id", principal.UserID, "organization_id", principal.OrganizationID, "role", principal.Role, "method", r.Method, "path", r.URL.Path)
 				httpx.WriteError(w, http.StatusForbidden, "forbidden", "You do not have permission to perform this action.")
 				return
 			}

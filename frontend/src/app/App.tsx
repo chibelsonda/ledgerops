@@ -12,6 +12,8 @@ const SyncPage = lazy(() => import('../features/sync/SyncPage').then((module) =>
 const ClientsPage = lazy(() => import('../features/clients/ClientsPage').then((module) => ({ default: module.ClientsPage })))
 const RemindersPage = lazy(() => import('../features/reminders/RemindersPage').then((module) => ({ default: module.RemindersPage })))
 const ProjectsPage = lazy(() => import('../features/projects/ProjectsPage').then((module) => ({ default: module.ProjectsPage })))
+const ClosePage = lazy(() => import('../features/close/ClosePage').then((module) => ({ default: module.ClosePage })))
+const ForecastPage = lazy(() => import('../features/forecast/ForecastPage').then((module) => ({ default: module.ForecastPage })))
 
 export default function App() {
   const { session, isLoading } = useAuth()
@@ -27,6 +29,8 @@ export default function App() {
           <Route path="invoices" element={<InvoicesPage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
+          <Route path="close" element={<ClosePage />} />
+          <Route path="forecast" element={<ForecastPage />} />
           <Route path="collections" element={<RemindersPage />} />
           <Route path="review" element={<ReviewPage />} />
           <Route path="sync" element={canOperateSync ? <SyncPage /> : <Navigate to="/" replace />} />

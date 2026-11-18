@@ -11,11 +11,12 @@ import (
 
 type Repository interface {
 	FindUserByEmail(context.Context, string) (*User, error)
-	RecordFailedLogin(context.Context, string, int, *time.Time) error
+	RecordFailedLogin(context.Context, string, time.Time, int, time.Duration) error
 	ResetFailedLogins(context.Context, string) error
 	CreateSession(context.Context, string, string, []byte, []byte, time.Time) error
-	FindSession(context.Context, []byte, time.Time) (*StoredSession, error)
+	FindSession(context.Context, []byte, time.Time, time.Time) (*StoredSession, error)
 	RotateCSRF(context.Context, int64, []byte, time.Time) error
+	TouchSession(context.Context, int64, time.Time) error
 	RevokeSession(context.Context, []byte, time.Time) error
 }
 
@@ -48,12 +49,15 @@ func (r *PostgresRepository) FindUserByEmail(ctx context.Context, email string) 
 	return &user, nil
 }
 
-func (r *PostgresRepository) RecordFailedLogin(ctx context.Context, userID string, attempts int, lockedUntil *time.Time) error {
-	if err := r.db.WithContext(ctx).Table("users").Where("id = ?", userID).Updates(map[string]any{
-		"failed_login_attempts": attempts,
-		"locked_until":          lockedUntil,
-		"updated_at":            gorm.Expr("now()"),
-	}).Error; err != nil {
+func (r *PostgresRepository) RecordFailedLogin(ctx context.Context, userID string, now time.Time, maxAttempts int, lockout time.Duration) error {
+	lockedUntil := now.Add(lockout)
+	if err := r.db.WithContext(ctx).Exec(`
+		UPDATE users
+		SET failed_login_attempts = CASE WHEN failed_login_attempts + 1 >= ? THEN 0 ELSE failed_login_attempts + 1 END,
+			locked_until = CASE WHEN failed_login_attempts + 1 >= ? THEN ? ELSE NULL END,
+			updated_at = now()
+		WHERE id = ? AND active = true AND (locked_until IS NULL OR locked_until <= ?)`,
+		maxAttempts, maxAttempts, lockedUntil, userID, now).Error; err != nil {
 		return fmt.Errorf("record failed login: %w", err)
 	}
 	return nil
@@ -79,12 +83,13 @@ func (r *PostgresRepository) CreateSession(ctx context.Context, userID, organiza
 	return nil
 }
 
-func (r *PostgresRepository) FindSession(ctx context.Context, tokenHash []byte, now time.Time) (*StoredSession, error) {
+func (r *PostgresRepository) FindSession(ctx context.Context, tokenHash []byte, now, idleCutoff time.Time) (*StoredSession, error) {
 	var row struct {
 		ID               int64
 		TokenHash        []byte
 		CSRFHash         []byte
 		ExpiresAt        time.Time
+		LastSeenAt       time.Time
 		UserID           string
 		OrganizationID   string
 		OrganizationName string
@@ -93,14 +98,14 @@ func (r *PostgresRepository) FindSession(ctx context.Context, tokenHash []byte, 
 		Role             identity.Role
 	}
 	result := r.db.WithContext(ctx).Raw(`
-		SELECT s.id, s.token_hash, s.csrf_hash, s.expires_at,
+		SELECT s.id, s.token_hash, s.csrf_hash, s.expires_at, s.last_seen_at,
 			u.id::text AS user_id, o.id::text AS organization_id,
 			o.name AS organization_name, u.email, u.display_name, m.role
 		FROM auth_sessions s
 		JOIN users u ON u.id = s.user_id AND u.active = true
 		JOIN organizations o ON o.id = s.organization_id
 		JOIN organization_memberships m ON m.user_id = u.id AND m.organization_id = o.id
-		WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`, tokenHash, now).Scan(&row)
+		WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND s.last_seen_at > ?`, tokenHash, now, idleCutoff).Scan(&row)
 	if result.Error != nil {
 		return nil, fmt.Errorf("find session: %w", result.Error)
 	}
@@ -108,10 +113,11 @@ func (r *PostgresRepository) FindSession(ctx context.Context, tokenHash []byte, 
 		return nil, nil
 	}
 	return &StoredSession{
-		ID:        row.ID,
-		TokenHash: row.TokenHash,
-		CSRFHash:  row.CSRFHash,
-		ExpiresAt: row.ExpiresAt,
+		ID:         row.ID,
+		TokenHash:  row.TokenHash,
+		CSRFHash:   row.CSRFHash,
+		ExpiresAt:  row.ExpiresAt,
+		LastSeenAt: row.LastSeenAt,
 		Principal: identity.Principal{
 			UserID:           row.UserID,
 			OrganizationID:   row.OrganizationID,
@@ -121,6 +127,13 @@ func (r *PostgresRepository) FindSession(ctx context.Context, tokenHash []byte, 
 			Role:             row.Role,
 		},
 	}, nil
+}
+
+func (r *PostgresRepository) TouchSession(ctx context.Context, sessionID int64, now time.Time) error {
+	if err := r.db.WithContext(ctx).Table("auth_sessions").Where("id = ? AND revoked_at IS NULL", sessionID).Update("last_seen_at", now).Error; err != nil {
+		return fmt.Errorf("touch session: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) RotateCSRF(ctx context.Context, sessionID int64, csrfHash []byte, now time.Time) error {

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +12,8 @@ import (
 
 func TestRequireRolesRejectsReviewer(t *testing.T) {
 	called := false
-	handler := RequireRoles(identity.RoleAdmin, identity.RoleController)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := RequireRoles(logger, identity.RoleAdmin, identity.RoleController)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		called = true
 	}))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/invoices", nil)
@@ -28,7 +31,8 @@ func TestRequireRolesRejectsReviewer(t *testing.T) {
 }
 
 func TestRequireRolesAllowsController(t *testing.T) {
-	handler := RequireRoles(identity.RoleAdmin, identity.RoleController)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := RequireRoles(logger, identity.RoleAdmin, identity.RoleController)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/invoices", nil)

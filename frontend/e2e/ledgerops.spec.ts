@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test'
 
 async function signIn(page: import('@playwright/test').Page) {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Use demo login' }).click()
+  await page.getByLabel('Email address').fill('mara@ledgerops.demo')
+  await page.getByLabel('Password').fill('LedgerOpsDemo!2026')
   const loginResponse = page.waitForResponse((response) => response.url().endsWith('/api/v1/auth/login') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Sign in securely' }).click()
   const session = await (await loginResponse).json() as { csrfToken: string }
@@ -41,6 +42,12 @@ test('hides operator tools from reviewers', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Edit / })).toHaveCount(0)
   await page.getByRole('link', { name: 'Projects' }).click()
   await expect(page.getByRole('button', { name: 'New project' })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Month-end close' }).click()
+  await expect(page.getByRole('button', { name: 'New close period' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Complete', exact: true })).toHaveCount(0)
+  await page.getByRole('link', { name: 'Cash forecast' }).click()
+  await expect(page.getByRole('button', { name: 'New scenario' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Add adjustment' })).toHaveCount(0)
   await page.goto('/sync')
   await expect(page.getByRole('heading', { name: 'The numbers that need your attention.' })).toBeVisible()
 })
@@ -50,8 +57,8 @@ test('shows the financial overview and invoice data', async ({ page }) => {
   await expect(page.locator('.app-shell')).toHaveCSS('display', 'grid')
   await expect(page.locator('.sidebar')).toHaveCSS('background-color', 'rgb(20, 39, 31)')
   await expect(page.locator('body')).toHaveCSS('font-family', /Manrope Variable/)
-  await expect(page.locator('.page-header h1')).toHaveCSS('font-family', /Newsreader Variable/)
-  await expect(page.locator('.metric-card').first()).toHaveCSS('border-radius', '12px')
+  await expect(page.locator('.page-header h1')).toHaveCSS('font-family', /Manrope Variable/)
+  await expect(page.locator('.metric-card').first()).toHaveCSS('border-radius', '8px')
   await expect(page.getByRole('heading', { name: 'The numbers that need your attention.' })).toBeVisible()
   await expect(page.getByText('Outstanding A/R')).toBeVisible()
 
@@ -74,7 +81,7 @@ test('creates and edits an invoice with an audit trail', async ({ page }) => {
 
   await page.getByRole('button', { name: 'New invoice' }).click()
   await page.getByLabel('Invoice number').fill(invoiceNumber)
-  await page.getByLabel('Client').selectOption({ label: 'Arc & Co.' })
+  await page.getByLabel('Client', { exact: true }).selectOption({ label: 'Arc & Co.' })
   await page.getByLabel('Status', { exact: true }).selectOption('open')
   await page.getByLabel('Amount', { exact: true }).fill('1234.56')
   await page.getByRole('button', { name: 'Create invoice' }).click()
@@ -166,7 +173,7 @@ test('approves immutable credit notes and payment reversals with separation of d
   await page.getByRole('link', { name: 'Invoices' }).click()
   await page.getByRole('button', { name: 'New invoice' }).click()
   await page.getByLabel('Invoice number').fill(invoiceNumber)
-  await page.getByLabel('Client').selectOption({ label: 'Arc & Co.' })
+  await page.getByLabel('Client', { exact: true }).selectOption({ label: 'Arc & Co.' })
   await page.getByLabel('Status', { exact: true }).selectOption('open')
   await page.getByLabel('Amount', { exact: true }).fill('1000')
   await page.getByRole('button', { name: 'Create invoice' }).click()
@@ -297,7 +304,7 @@ test('approves a project contract and creates an immutable milestone invoice', a
   await page.getByRole('link', { name: 'Projects' }).click()
   await expect(page.getByText('ARC-PORTAL', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'New project' }).click()
-  await page.getByLabel('Client').selectOption({ label: 'Arc & Co.' })
+  await page.getByLabel('Client', { exact: true }).selectOption({ label: 'Arc & Co.' })
   await page.getByLabel('Project code').fill(projectCode)
   await page.getByLabel('Project name').fill('Controlled billing rollout')
   await page.getByLabel('Contract number').fill(contractNumber)
@@ -335,6 +342,75 @@ test('approves a project contract and creates an immutable milestone invoice', a
   await expect(page.getByText(invoiceNumber, { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: `View ${invoiceNumber}` })).toBeVisible()
   await expect(page.getByRole('button', { name: `Edit ${invoiceNumber}` })).toHaveCount(0)
+})
+
+test('completes and independently approves a month-end close', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('link', { name: 'Month-end close' }).click()
+  await expect(page.getByRole('heading', { name: 'Month-end close' })).toBeVisible()
+
+  const nextPeriod = await page.evaluate(async () => {
+    const response = await fetch('/api/v1/close-periods')
+    const body = await response.json() as { items: Array<{ monthStart: string }> }
+    const latest = body.items.map((item) => item.monthStart).sort().at(-1) ?? new Date().toISOString().slice(0, 7) + '-01'
+    const month = new Date(`${latest}T00:00:00Z`)
+    month.setUTCMonth(month.getUTCMonth() + 1)
+    const due = new Date(month); due.setUTCMonth(due.getUTCMonth() + 1); due.setUTCDate(5)
+    return { monthStart: month.toISOString().slice(0, 10), dueOn: due.toISOString().slice(0, 10) }
+  })
+  const periodLabel = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${nextPeriod.monthStart}T00:00:00Z`))
+
+  await page.getByRole('button', { name: 'New close period' }).click()
+  await page.getByLabel('Close month').fill(nextPeriod.monthStart)
+  await page.getByLabel('Close due date').fill(nextPeriod.dueOn)
+  await page.getByRole('button', { name: 'Create checklist' }).click()
+  await expect(page.getByText(periodLabel, { exact: true })).toBeVisible()
+
+  for (let index = 0; index < 6; index += 1) {
+    await page.getByRole('button', { name: 'Complete', exact: true }).first().click()
+    await page.getByLabel('Completion evidence').fill(`Verified close control ${index + 1} against the supporting ledger.`)
+    await page.getByRole('button', { name: 'Complete task' }).click()
+  }
+  await expect(page.getByText('Checklist complete and ready for independent review.')).toBeVisible()
+  await page.getByRole('button', { name: 'Submit for review' }).click()
+  await expect(page.getByText('In Review', { exact: true }).first()).toBeVisible()
+  await signOut(page)
+
+  await signInAs(page, 'admin@ledgerops.demo', 'LedgerOpsAdmin!2026')
+  await page.getByRole('link', { name: 'Month-end close' }).click()
+  await page.getByText(periodLabel, { exact: true }).click()
+  await page.getByRole('button', { name: 'Review close' }).click()
+  await page.getByLabel('Review note').fill('Verified all checklist evidence against the final close binder.')
+  await page.getByRole('button', { name: 'Approve and close' }).click()
+  await expect(page.getByText('Closed', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Review close' })).toHaveCount(0)
+})
+
+test('models a 13-week cash scenario with an append-only adjustment', async ({ page }) => {
+  const suffix = Date.now()
+  await signIn(page)
+  await page.getByRole('link', { name: 'Cash forecast' }).click()
+  await expect(page.getByRole('heading', { name: '13-week cash-flow forecast' })).toBeVisible()
+  await expect(page.getByLabel('Forecast scenario', { exact: true })).toHaveValue('b1111111-1111-4111-8111-111111111111')
+  await expect(page.locator('.forecast-table tbody tr')).toHaveCount(13)
+
+  await page.getByRole('button', { name: 'Add adjustment' }).click()
+  await page.getByLabel('Cash direction').selectOption('inflow')
+  await page.getByLabel('Description').fill(`Owner funding ${suffix}`)
+  await page.getByLabel('Amount').fill('1234')
+  await page.getByRole('button', { name: 'Add adjustment', exact: true }).last().click()
+  await expect(page.getByText(`Owner funding ${suffix}`, { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'New scenario' }).click()
+  await page.getByLabel('Scenario name').fill(`Downside ${suffix}`)
+  await page.getByLabel('Collection rate (%)').fill('60')
+  await page.getByLabel('Collection delay (days)').fill('28')
+  await page.getByLabel('Expense growth (%)').fill('15')
+  await page.getByLabel('Milestone probability (%)').fill('40')
+  await page.getByRole('button', { name: 'Create scenario' }).click()
+  await expect(page.getByRole('option', { name: `Downside ${suffix}` })).toBeAttached()
+  await expect(page.getByLabel('Forecast scenario', { exact: true })).toHaveValue(/.+/)
+  await expect(page.getByText('60%', { exact: true })).toBeVisible()
 })
 
 test('resolves a reconciliation exception with an audit note', async ({ page }) => {

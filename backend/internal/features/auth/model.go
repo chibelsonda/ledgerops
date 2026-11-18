@@ -22,11 +22,12 @@ type User struct {
 }
 
 type StoredSession struct {
-	ID        int64
-	TokenHash []byte
-	CSRFHash  []byte
-	ExpiresAt time.Time
-	Principal identity.Principal
+	ID         int64
+	TokenHash  []byte
+	CSRFHash   []byte
+	ExpiresAt  time.Time
+	LastSeenAt time.Time
+	Principal  identity.Principal
 }
 
 type SessionResponse struct {

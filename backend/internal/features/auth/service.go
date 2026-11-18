@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"net/mail"
 	"strings"
 	"time"
 
@@ -30,18 +29,19 @@ const (
 )
 
 type Service struct {
-	repository Repository
-	sessionTTL time.Duration
-	dummyHash  string
-	now        func() time.Time
+	repository     Repository
+	sessionTTL     time.Duration
+	sessionIdleTTL time.Duration
+	dummyHash      string
+	now            func() time.Time
 }
 
-func NewService(repository Repository, sessionTTL time.Duration) (*Service, error) {
+func NewService(repository Repository, sessionTTL, sessionIdleTTL time.Duration) (*Service, error) {
 	dummyHash, err := HashPassword("timing-only-password-value")
 	if err != nil {
 		return nil, err
 	}
-	return &Service{repository: repository, sessionTTL: sessionTTL, dummyHash: dummyHash, now: time.Now}, nil
+	return &Service{repository: repository, sessionTTL: sessionTTL, sessionIdleTTL: sessionIdleTTL, dummyHash: dummyHash, now: time.Now}, nil
 }
 
 func (s *Service) Login(ctx context.Context, request LoginRequest) (SessionResponse, string, error) {
@@ -64,14 +64,7 @@ func (s *Service) Login(ctx context.Context, request LoginRequest) (SessionRespo
 	now := s.now()
 	if !user.Active || (user.LockedUntil != nil && user.LockedUntil.After(now)) || !passwordMatches {
 		if !passwordMatches && user.Active && (user.LockedUntil == nil || !user.LockedUntil.After(now)) {
-			attempts := user.FailedLoginAttempts + 1
-			var lockedUntil *time.Time
-			if attempts >= maxLoginAttempts {
-				locked := now.Add(lockoutDuration)
-				lockedUntil = &locked
-				attempts = 0
-			}
-			if err := s.repository.RecordFailedLogin(ctx, user.ID, attempts, lockedUntil); err != nil {
+			if err := s.repository.RecordFailedLogin(ctx, user.ID, now, maxLoginAttempts, lockoutDuration); err != nil {
 				return SessionResponse{}, "", err
 			}
 		}
@@ -129,6 +122,9 @@ func (s *Service) Authenticate(ctx context.Context, sessionToken, csrfToken stri
 			return identity.Principal{}, ErrInvalidCSRF
 		}
 	}
+	if err := s.repository.TouchSession(ctx, session.ID, s.now()); err != nil {
+		return identity.Principal{}, err
+	}
 	return session.Principal, nil
 }
 
@@ -147,7 +143,8 @@ func (s *Service) findSession(ctx context.Context, token string) (*StoredSession
 		return nil, ErrUnauthenticated
 	}
 	hash := sha256.Sum256(decoded)
-	session, err := s.repository.FindSession(ctx, hash[:], s.now())
+	now := s.now()
+	session, err := s.repository.FindSession(ctx, hash[:], now, now.Add(-s.sessionIdleTTL))
 	if err != nil {
 		return nil, err
 	}
@@ -167,8 +164,46 @@ func randomToken(size int) (string, []byte, error) {
 }
 
 func validEmail(value string) bool {
-	address, err := mail.ParseAddress(value)
-	return err == nil && strings.EqualFold(address.Address, value) && len(value) <= 254
+	if len(value) < 3 || len(value) > 254 || !isASCII(value) {
+		return false
+	}
+	parts := strings.Split(value, "@")
+	if len(parts) != 2 || len(parts[0]) > 64 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	local := parts[0]
+	if local[0] == '.' || local[len(local)-1] == '.' || strings.Contains(local, "..") {
+		return false
+	}
+	for _, character := range local {
+		if !strings.ContainsRune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.!#$%&'*+-/=?^_`{|}~", character) {
+			return false
+		}
+	}
+	labels := strings.Split(parts[1], ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '-') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func isASCII(value string) bool {
+	for index := range len(value) {
+		if value[index] > 127 {
+			return false
+		}
+	}
+	return true
 }
 
 func principalFromUser(user User) identity.Principal {

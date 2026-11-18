@@ -29,6 +29,8 @@ Go Handler → Service → Repository/GORM ────────► PostgreSQ
 - **Review actions are transactional.** Resolving an exception and writing its audit event either both succeed or both roll back.
 - **Project billing uses controlled state transitions.** Contract and change-order decisions enforce separation of duties. Approved value caps milestone allocations, and milestone invoicing creates the invoice, advances the milestone, and appends both audit records in one transaction.
 - **Financial approvals are immutable.** PostgreSQL triggers prevent approved or rejected contracts and change orders from being rewritten or deleted. Invoiced milestones cannot return to a planned state, and their generated invoices cannot be edited through the general invoice endpoint.
+- **Month-end close is a controlled state machine.** Controllers create close periods, operators attach evidence to a generated checklist, and an independent admin either returns the period to draft or permanently closes it. Closed periods and their task evidence are protected by PostgreSQL triggers.
+- **Cash forecasting is explainable.** Each 13-week scenario stores explicit collection, timing, expense-growth, and project-probability assumptions. The repository combines those assumptions with open invoice balances, approved project milestones, historical operating run-rate, and append-only manual adjustments.
 - **GORM does not hide financial SQL.** GORM owns connection pooling, scoped writes, result mapping, and transactions. Reporting CTEs and queue locking remain explicit through GORM's raw-query API so they can be reviewed and explained with `EXPLAIN (ANALYZE, BUFFERS)`.
 
 ## SOLID, DRY, and KISS
@@ -39,6 +41,7 @@ Go Handler → Service → Repository/GORM ────────► PostgreSQ
 - Services normalize inputs, enforce use-case policy, and depend only on the repository capabilities they consume.
 - Repositories own PostgreSQL queries, row locking, and atomic transactions; concurrent financial invariants are rechecked inside those transactions.
 - Project billing locks the approved contract row while allocating change orders and milestones, so concurrent requests cannot oversubscribe the authorized value.
+- Close submission and approval lock the period row and recheck checklist completion and separation of duties inside the transaction.
 - `internal/app/router.go` is the composition root: it constructs concrete repositories, injects them into services, and injects services into handlers.
 - The background worker also depends on a narrow queue repository interface; only application composition creates the concrete GORM repository.
 - Configuration, migrations, financial rules, transport, data access, and background processing have focused packages.

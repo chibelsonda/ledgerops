@@ -25,17 +25,29 @@
 @layer components {
   .app-shell { @apply min-h-screen grid grid-cols-[250px_minmax(0,1fr)]; }
   .sidebar { @apply sticky top-0 flex h-screen flex-col bg-brand-deep px-[18px] pb-5 pt-[26px] text-emerald-50; }
-  .brand { @apply flex items-center gap-3 px-2 pb-6 font-display text-2xl tracking-wide; }
-  .brand-mark { @apply grid size-[34px] place-items-center rounded-lg border border-amber-100/30 text-amber-100; }
+  .sidebar-heading { @apply flex items-start justify-between; }
+  .brand { @apply flex items-center gap-3 px-2 pb-6 font-sans text-2xl font-semibold tracking-tight; }
+  .brand-mark { @apply grid size-[36px] shrink-0 place-items-center rounded-lg border border-amber-100/30 bg-amber-100/5 text-amber-100; }
+  .brand-mark svg { @apply size-6; }
   .sidebar nav { @apply flex flex-col gap-1; }
   .nav-link { @apply flex items-center gap-3 rounded-lg px-3 py-[11px] text-[13px] font-medium text-emerald-100/80 no-underline transition hover:bg-white/5 hover:text-white; }
   .nav-link.active { @apply bg-white/10 text-white; }
   .nav-count { @apply ml-auto grid h-[21px] min-w-[21px] place-items-center rounded-lg bg-amber-200 text-xs font-bold text-brand-deep; }
-  .avatar { @apply grid size-[34px] place-items-center rounded-lg bg-amber-200 text-xs font-bold text-brand-deep; }
+  .avatar { @apply grid size-[34px] place-items-center rounded-full bg-amber-200 text-xs font-bold text-brand-deep; }
+  .mobile-sidebar-dialog, .mobile-menu-trigger { @apply hidden; }
+  .desktop-sidebar-toggle { @apply grid size-10 shrink-0 place-items-center border-0 bg-transparent p-0 text-emerald-100/70 hover:text-white; }
+  .app-shell.sidebar-collapsed { @apply grid-cols-[82px_minmax(0,1fr)]; }
+  .sidebar-collapsed > .sidebar { @apply px-3; }
+  .sidebar-collapsed > .sidebar .sidebar-heading { @apply flex-col items-center; }
+  .sidebar-collapsed > .sidebar .brand { @apply justify-center px-0; }
+  .sidebar-collapsed > .sidebar .brand > span:last-child { @apply hidden; }
+  .sidebar-collapsed > .sidebar .nav-link { @apply justify-center px-0; }
+  .sidebar-collapsed > .sidebar .nav-label, .sidebar-collapsed > .sidebar .nav-count { @apply hidden; }
 
   .main-content { @apply min-w-0; }
   .main-content-header { @apply border-b border-line bg-paper/70; }
   .main-content-header-inner { @apply flex h-16 w-full items-center justify-between gap-4 px-[46px] text-sm text-ink; }
+  .main-content-header-start { @apply flex items-center gap-3; }
   .user-menu { @apply relative; }
   .user-menu-trigger { @apply flex items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-ink outline-none transition hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-emerald-700/20; }
   .user-menu-copy { @apply flex max-w-48 flex-col; }
@@ -62,7 +74,7 @@
 
   .page { @apply w-full px-[46px] pb-[70px] pt-[42px]; }
   .page-header { @apply mb-[34px] flex items-end justify-between gap-8; }
-  .page-header h1 { @apply my-2 font-display text-[clamp(32px,4vw,45px)] font-normal leading-[1.04] tracking-[-.7px]; }
+  .page-header h1 { @apply my-2 font-sans text-[clamp(28px,3vw,36px)] font-semibold leading-[1.12] tracking-tight; }
   .page-header p { @apply m-0 max-w-[690px] text-sm leading-relaxed text-muted; }
   .eyebrow { @apply text-[11px] font-bold uppercase tracking-[1.5px] text-brand; }
   .header-action { @apply shrink-0; }
@@ -127,7 +139,9 @@
   .row-action { @apply w-[92px] text-right; }
   .row-action button { @apply py-1.5; }
   .table-pagination { @apply flex items-center justify-end gap-2 border-t border-line px-[18px] py-3 text-xs font-medium text-muted; }
-  .table-pagination button { @apply size-8 p-0; }
+  .table-pagination button { @apply size-8 p-0 text-stone-700; }
+  .table-pagination button svg { @apply size-4 shrink-0 stroke-[2.25]; }
+  .table-pagination button:disabled { @apply text-stone-400 opacity-100; }
   .page-size { @apply mr-auto flex items-center gap-2; }
   .page-size select { @apply w-[68px] py-1.5; }
   .header-actions { @apply flex items-center gap-2; }
@@ -138,7 +152,7 @@
   .invoice-dialog-positioner { @apply fixed inset-0 flex justify-end overflow-hidden; }
   .invoice-dialog-panel { @apply h-full w-full max-w-[760px] overflow-y-auto overscroll-contain border-l border-line bg-paper shadow-[-20px_0_70px_rgba(20,39,31,.22)] transition duration-300 ease-out data-closed:translate-x-full; }
   .invoice-dialog-heading { @apply sticky top-0 z-10 grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line bg-paper px-6 py-5; }
-  .invoice-dialog-heading h2 { @apply mb-0 mt-1 font-display text-[28px] font-medium leading-none; }
+  .invoice-dialog-heading h2 { @apply mb-0 mt-1 font-sans text-2xl font-semibold leading-tight tracking-tight; }
   .invoice-dialog-title-icon { @apply grid size-10 place-items-center rounded-lg bg-emerald-100 text-brand; }
   .invoice-dialog-close { @apply size-10 !rounded-none !bg-transparent !p-0 text-stone-500 shadow-none hover:!bg-transparent hover:!text-ink; }
   .invoice-tabbed-panel { @apply flex flex-col overflow-hidden; }
@@ -230,7 +244,7 @@
   .project-detail-panel { @apply max-w-[920px]; }
   .project-detail-content { @apply p-6; }
   .project-hero { @apply flex items-start justify-between gap-5; }
-  .project-hero h2 { @apply mb-1 mt-2 font-display text-3xl font-medium; }
+  .project-hero h2 { @apply mb-1 mt-2 font-sans text-2xl font-semibold tracking-tight; }
   .project-hero p { @apply m-0 text-xs text-muted; }
   .project-value-grid { @apply my-6 grid grid-cols-5 gap-3; }
   .project-value-grid > div { @apply flex flex-col rounded-lg border border-line bg-stone-50/70 p-3; }
@@ -260,10 +274,77 @@
   .project-nested-backdrop { @apply fixed inset-0 bg-brand-deep/50 backdrop-blur-[2px]; }
   .project-nested-positioner { @apply fixed inset-0 grid place-items-center p-4; }
   .project-nested-panel { @apply w-full max-w-lg rounded-lg border border-line bg-paper p-6 shadow-[0_24px_80px_rgba(20,39,31,.28)]; }
-  .project-nested-panel h2 { @apply m-0 font-display text-2xl font-medium; }
+  .project-nested-panel h2 { @apply m-0 font-sans text-xl font-semibold tracking-tight; }
   .project-nested-panel > p { @apply mb-5 mt-2 text-xs leading-relaxed text-muted; }
   .project-invoice-grid { @apply grid grid-cols-2 gap-4; }
   .project-invoice-grid > :first-child { @apply col-span-full; }
+
+  .close-layout { @apply grid grid-cols-[300px_minmax(0,1fr)] items-start gap-[15px]; }
+  .close-period-list { @apply sticky top-6 overflow-hidden; }
+  .close-period-list > .panel-heading { @apply border-b border-line p-5; }
+  .close-period-option { @apply flex w-full items-start justify-between gap-3 rounded-none border-0 border-b border-line bg-transparent px-5 py-4 text-left transition hover:bg-stone-50; }
+  .close-period-option.selected { @apply bg-emerald-50 shadow-[inset_3px_0_#1f7550]; }
+  .close-period-option > span { @apply flex flex-col gap-1; }
+  .close-period-option > span:last-child { @apply items-end; }
+  .close-period-option strong { @apply text-xs; }
+  .close-period-option small { @apply text-[10px] text-muted; }
+  .close-workspace { @apply min-h-[620px] p-6; }
+  .close-hero { @apply flex items-start justify-between gap-5 border-b border-line pb-5; }
+  .close-hero h2 { @apply mb-1 mt-2 font-sans text-2xl font-semibold tracking-tight; }
+  .close-hero p { @apply m-0 text-xs text-muted; }
+  .close-hero-actions { @apply flex items-center gap-3; }
+  .close-summary-grid { @apply my-5 grid grid-cols-3 gap-3; }
+  .close-summary-grid > div { @apply grid grid-cols-[28px_1fr] items-center rounded-lg border border-line bg-stone-50/70 p-4; }
+  .close-summary-grid svg { @apply row-span-2 text-brand; }
+  .close-summary-grid span { @apply text-[10px] font-semibold text-muted; }
+  .close-summary-grid strong { @apply text-sm; }
+  .close-progress { @apply h-2 overflow-hidden rounded-full bg-stone-200; }
+  .close-progress span { @apply block h-full rounded-full bg-brand transition-all; }
+  .close-review-note { @apply mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-stone-700; }
+  .close-section { @apply mt-6 border-t border-line pt-5; }
+  .close-task-list { @apply flex flex-col gap-2; }
+  .close-task { @apply grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-line bg-paper px-4 py-3; }
+  .close-task.completed { @apply bg-stone-50/70; }
+  .close-task-check { @apply grid size-7 place-items-center rounded-lg bg-stone-200 text-[10px] font-bold text-muted; }
+  .close-task.completed .close-task-check { @apply bg-emerald-100 text-brand; }
+  .close-task > div { @apply flex min-w-0 flex-col gap-1; }
+  .close-task > div small { @apply text-[9px] font-bold uppercase tracking-wide text-brand; }
+  .close-task > div strong { @apply text-xs; }
+  .close-task > div p { @apply m-0 text-[11px] leading-relaxed text-stone-700; }
+  .close-task > div span { @apply text-[10px] text-muted; }
+  .close-task > svg { @apply text-brand; }
+  .close-submit { @apply mt-5 flex items-center justify-between gap-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3; }
+  .close-submit span { @apply text-xs text-brand; }
+  .close-audit { @apply pb-0; }
+  .close-modal-title { @apply mb-5 flex items-center justify-between gap-4; }
+  .close-modal-title button { @apply size-8 p-0; }
+  .close-dialog-form { @apply flex flex-col gap-4; }
+  .close-dialog-form > p { @apply m-0 text-xs leading-relaxed text-muted; }
+
+  .forecast-toolbar { @apply mb-[15px] flex items-end justify-between gap-6 p-5; }
+  .forecast-toolbar > div:first-child { @apply w-64; }
+  .forecast-assumptions { @apply flex flex-wrap justify-end gap-x-5 gap-y-2 text-[10px] text-muted; }
+  .forecast-assumptions span { @apply flex flex-col; }
+  .forecast-assumptions strong { @apply text-xs text-ink; }
+  .forecast-metrics { @apply mb-[15px] grid grid-cols-4 gap-[13px]; }
+  .forecast-metrics > div { @apply grid grid-cols-[30px_1fr] items-center p-5; }
+  .forecast-metrics svg { @apply row-span-2 text-brand; }
+  .forecast-metrics span { @apply text-[10px] font-semibold text-muted; }
+  .forecast-metrics strong { @apply text-base tabular-nums; }
+  .forecast-metrics .forecast-risk { @apply border-red-200 bg-red-50; }
+  .forecast-metrics .forecast-risk svg, .forecast-metrics .forecast-risk strong { @apply text-red-700; }
+  .forecast-chart-panel { @apply mb-[15px] p-[22px]; }
+  .forecast-chart { @apply mt-5 h-[300px]; }
+  .forecast-table { @apply mb-[15px]; }
+  .forecast-inflow { @apply text-brand; }
+  .forecast-adjustments { @apply p-[22px]; }
+  .forecast-adjustment { @apply mt-3 grid grid-cols-[28px_1fr_auto] items-center gap-3 rounded-lg border border-line bg-stone-50/70 px-4 py-3; }
+  .forecast-adjustment > span { @apply grid size-7 place-items-center rounded-lg bg-white; }
+  .forecast-adjustment > div { @apply flex flex-col gap-1; }
+  .forecast-adjustment strong { @apply text-xs; }
+  .forecast-adjustment small { @apply text-[10px] text-muted; }
+  .forecast-dialog-form { @apply grid grid-cols-2 gap-4; }
+  .forecast-dialog-form > :first-child, .forecast-dialog-form > .invoice-dialog-actions { @apply col-span-full; }
 
   .review-layout { @apply grid grid-cols-[minmax(0,1.45fr)_minmax(310px,.75fr)] items-start gap-[15px]; }
   .review-list { @apply overflow-hidden; }
@@ -325,14 +406,14 @@
 
   .login-page { @apply grid min-h-screen grid-cols-[minmax(420px,.9fr)_minmax(520px,1.1fr)] bg-paper; }
   .login-story { @apply flex min-h-screen flex-col justify-between overflow-hidden bg-brand-deep px-[clamp(36px,6vw,88px)] py-[clamp(34px,6vw,72px)] text-emerald-50; }
-  .login-brand { @apply flex items-center gap-3 font-display text-[28px] tracking-wide; }
+  .login-brand { @apply flex items-center gap-3 font-sans text-[28px] font-semibold tracking-tight; }
   .login-story .eyebrow { @apply text-emerald-300; }
-  .login-story h1 { @apply mt-5 max-w-[600px] font-display text-[clamp(48px,5.2vw,76px)] font-medium leading-[.98] tracking-[-1.5px]; }
+  .login-story h1 { @apply mt-5 max-w-[600px] font-sans text-[clamp(40px,4.5vw,60px)] font-semibold leading-[1.05] tracking-tight; }
   .login-story p { @apply mt-6 max-w-[520px] text-sm leading-7 text-emerald-100/80; }
   .login-security { @apply flex items-center gap-2.5 border-t border-white/10 pt-5 text-xs text-emerald-100/75; }
   .login-panel { @apply grid place-items-center bg-warm px-8 py-12; }
   .login-card { @apply w-full max-w-[430px] rounded-lg border border-line bg-paper p-[clamp(28px,5vw,46px)] shadow-[0_28px_80px_rgba(25,39,31,.12)]; }
-  .login-card h2 { @apply mb-2 mt-2 font-display text-[36px] font-medium leading-tight; }
+  .login-card h2 { @apply mb-2 mt-2 font-sans text-[30px] font-semibold leading-tight tracking-tight; }
   .login-card > p { @apply text-xs leading-relaxed text-muted; }
   .login-form { @apply mt-8 flex flex-col gap-5; }
   .login-form button[type="submit"] { @apply mt-1 py-3; }
@@ -355,21 +436,31 @@
   .review-layout { @apply grid-cols-1; }
   .project-overview-grid { @apply grid-cols-2; }
   .project-value-grid { @apply grid-cols-3; }
+  .close-layout { @apply grid-cols-1; }
+  .close-period-list { @apply static; }
+  .forecast-metrics { @apply grid-cols-2; }
   .resolution-panel { @apply static; }
 }
 
 @media (max-width: 760px) {
   .app-shell { @apply block; }
-  .sidebar { @apply static h-auto w-full p-3.5; }
-  .brand { @apply px-1 pb-3; }
-  .sidebar nav { @apply flex-row overflow-x-auto; }
-  .nav-link { @apply shrink-0 px-3 py-2; }
-  .nav-count { @apply hidden; }
-  .main-content-header-inner { @apply h-14 px-4; }
+  .app-shell > .sidebar { @apply hidden; }
+  .mobile-sidebar-dialog { @apply relative z-[80] block; }
+  .mobile-sidebar-backdrop { @apply fixed inset-0 bg-brand-deep/45 backdrop-blur-[2px]; }
+  .mobile-sidebar { @apply fixed inset-y-0 left-0 flex h-full w-[min(300px,86vw)] flex-col overflow-y-auto px-[18px] pb-5 pt-5 shadow-[18px_0_60px_rgba(20,39,31,.3)]; }
+  .mobile-sidebar-heading { @apply mb-3 flex items-start justify-between gap-3; }
+  .mobile-sidebar-heading .brand { @apply px-1 pb-3; }
+  .mobile-sidebar-close { @apply grid size-10 shrink-0 place-items-center border-0 bg-transparent p-0 text-emerald-100 hover:bg-white/10 hover:text-white; }
+  .mobile-sidebar nav { @apply flex flex-col gap-1 overflow-visible; }
+  .mobile-sidebar .nav-link { @apply w-full shrink-0 px-3 py-3; }
+  .mobile-menu-trigger { @apply grid size-10 place-items-center border border-line bg-paper p-0 text-ink hover:bg-stone-100; }
+  .desktop-sidebar-toggle { @apply hidden; }
+  .main-content-header { @apply sticky top-0 z-30 bg-paper; }
+  .main-content-header-inner { @apply h-16 px-4; }
   .user-menu-copy { @apply hidden; }
   .page { @apply px-4 pb-14 pt-7; }
   .page-header { @apply mb-6 flex-col items-start; }
-  .page-header h1 { @apply text-[34px]; }
+  .page-header h1 { @apply text-[30px]; }
   .header-action, .header-action > * { @apply w-full; }
   .header-actions { @apply flex-col; }
   .invoice-search { @apply min-w-full; }
@@ -392,6 +483,14 @@
   .project-overview-grid, .project-value-grid, .project-inline-form, .project-invoice-grid { @apply grid-cols-1; }
   .project-record { @apply grid-cols-1; }
   .project-invoice-grid > :first-child { @apply col-auto; }
+  .close-summary-grid, .forecast-metrics { @apply grid-cols-1; }
+  .close-task { @apply grid-cols-[32px_minmax(0,1fr)]; }
+  .close-task button, .close-task > svg { @apply col-start-2 justify-self-start; }
+  .close-submit, .forecast-toolbar { @apply flex-col items-stretch; }
+  .forecast-toolbar > div:first-child { @apply w-full; }
+  .forecast-assumptions { @apply justify-start; }
+  .forecast-dialog-form { @apply grid-cols-1; }
+  .forecast-dialog-form > :first-child, .forecast-dialog-form > .invoice-dialog-actions { @apply col-auto; }
   .legend { @apply hidden; }
   .table-tools { @apply flex-wrap; }
   .record-count { @apply ml-0; }

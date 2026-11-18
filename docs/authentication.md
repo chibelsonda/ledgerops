@@ -17,11 +17,12 @@ These credentials are seeded only for the local portfolio environment and must n
 - Only SHA-256 verifiers are persisted for both tokens.
 - The opaque session token is sent only in an HttpOnly, SameSite Strict cookie.
 - The CSRF token is returned in the authenticated JSON response and required in `X-CSRF-Token` for every mutation.
-- Sessions expire server-side after `AUTH_SESSION_TTL` and are revoked during logout.
+- Sessions expire server-side after `AUTH_SESSION_TTL`, expire after `AUTH_SESSION_IDLE_TTL` without activity, and are revoked during logout.
 - Five consecutive failed passwords temporarily lock the account for fifteen minutes.
 - Login failures use a generic response, and nonexistent accounts still perform a password hash calculation to reduce timing differences.
+- Login is rate-limited per client IP, and authenticated API traffic is limited both per IP and per user.
 
-Set `AUTH_COOKIE_SECURE=true` whenever the app is served through HTTPS.
+Set `AUTH_COOKIE_SECURE=true` whenever the app is served through HTTPS. Production mode refuses to start without it.
 
 ## Permissions
 
