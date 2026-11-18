@@ -1,0 +1,411 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Newsreader Variable", ui-serif, Georgia, serif;
+  --color-ink: #18251f;
+  --color-muted: #525e57;
+  --color-brand: #1f7550;
+  --color-brand-deep: #14271f;
+  --color-paper: #fffdf8;
+  --color-warm: #f4f2eb;
+  --color-line: #dedbd1;
+  --color-accent: #c47a45;
+}
+
+@layer base {
+  * { @apply box-border; }
+  body { @apply m-0 min-h-screen min-w-80 bg-warm font-sans text-ink antialiased; }
+  p, label, small { @apply leading-relaxed; }
+  button, input, select, textarea { @apply rounded-lg; }
+  button { @apply cursor-pointer; }
+  button:disabled { @apply cursor-not-allowed; }
+}
+
+@layer components {
+  .app-shell { @apply min-h-screen grid grid-cols-[250px_minmax(0,1fr)]; }
+  .sidebar { @apply sticky top-0 flex h-screen flex-col bg-brand-deep px-[18px] pb-5 pt-[26px] text-emerald-50; }
+  .brand { @apply flex items-center gap-3 px-2 pb-6 font-display text-2xl tracking-wide; }
+  .brand-mark { @apply grid size-[34px] place-items-center rounded-lg border border-amber-100/30 text-amber-100; }
+  .sidebar nav { @apply flex flex-col gap-1; }
+  .nav-link { @apply flex items-center gap-3 rounded-lg px-3 py-[11px] text-[13px] font-medium text-emerald-100/80 no-underline transition hover:bg-white/5 hover:text-white; }
+  .nav-link.active { @apply bg-white/10 text-white; }
+  .nav-count { @apply ml-auto grid h-[21px] min-w-[21px] place-items-center rounded-lg bg-amber-200 text-xs font-bold text-brand-deep; }
+  .avatar { @apply grid size-[34px] place-items-center rounded-lg bg-amber-200 text-xs font-bold text-brand-deep; }
+
+  .main-content { @apply min-w-0; }
+  .main-content-header { @apply border-b border-line bg-paper/70; }
+  .main-content-header-inner { @apply flex h-16 w-full items-center justify-between gap-4 px-[46px] text-sm text-ink; }
+  .user-menu { @apply relative; }
+  .user-menu-trigger { @apply flex items-center gap-2.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-ink outline-none transition hover:bg-stone-100 focus-visible:ring-2 focus-visible:ring-emerald-700/20; }
+  .user-menu-copy { @apply flex max-w-48 flex-col; }
+  .user-menu-copy strong { @apply truncate text-xs; }
+  .user-menu-copy small { @apply text-[11px] font-medium text-muted; }
+  .user-menu-trigger > svg { @apply text-stone-500 transition; }
+  .user-menu-trigger[data-open] > svg { @apply rotate-180; }
+  .user-menu-dropdown { @apply z-50 w-60 rounded-lg border border-line bg-paper p-1.5 shadow-[0_16px_45px_rgba(20,39,31,.16)] outline-none; }
+  .user-menu-details { @apply flex flex-col border-b border-line px-3 py-2.5; }
+  .user-menu-details strong { @apply text-xs; }
+  .user-menu-details span { @apply mt-0.5 truncate text-[11px] text-muted; }
+  .user-menu-signout { @apply mt-1 flex w-full items-center gap-2 rounded-lg border-0 bg-transparent px-3 py-2 text-left text-xs font-semibold text-stone-700 outline-none data-focus:bg-stone-100 data-focus:text-ink; }
+
+  .toast-viewport { @apply pointer-events-none fixed right-4 top-4 z-[100] flex w-[min(380px,calc(100vw-32px))] flex-col gap-3; }
+  .toast { @apply pointer-events-auto grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border bg-paper p-4 shadow-[0_18px_50px_rgba(20,39,31,.2)]; animation: toast-in .2s ease-out; }
+  .toast-success { @apply border-emerald-200; }
+  .toast-error { @apply border-red-200; }
+  .toast-success .toast-icon { @apply text-emerald-700; }
+  .toast-error .toast-icon { @apply text-red-700; }
+  .toast-copy { @apply min-w-0; }
+  .toast-copy strong { @apply block text-xs text-ink; }
+  .toast-copy p { @apply mb-0 mt-1 text-xs leading-relaxed text-muted; }
+  .toast-dismiss { @apply -mr-1 -mt-1 grid size-8 place-items-center border-0 bg-transparent p-0 text-stone-500 hover:bg-stone-100 hover:text-ink; }
+
+  .page { @apply w-full px-[46px] pb-[70px] pt-[42px]; }
+  .page-header { @apply mb-[34px] flex items-end justify-between gap-8; }
+  .page-header h1 { @apply my-2 font-display text-[clamp(32px,4vw,45px)] font-normal leading-[1.04] tracking-[-.7px]; }
+  .page-header p { @apply m-0 max-w-[690px] text-sm leading-relaxed text-muted; }
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[1.5px] text-brand; }
+  .header-action { @apply shrink-0; }
+  .as-of { @apply flex items-center gap-2 rounded-lg border border-line bg-white/40 px-3 py-2 text-xs text-muted; }
+
+  .metrics-grid { @apply mb-[15px] grid grid-cols-4 gap-[13px]; }
+  .metric-card { @apply rounded-lg border border-line bg-paper p-5 shadow-[0_7px_26px_rgba(38,47,40,.035)]; }
+  .metric-top { @apply flex items-center justify-between text-xs text-muted; }
+  .metric-top svg { @apply text-brand; }
+  .metric-card > strong { @apply my-3.5 block font-display text-[27px] font-normal tracking-tight; }
+  .metric-card small { @apply text-[11px] text-muted; }
+  .metric-warning { @apply bg-amber-50; }
+  .metric-warning .metric-top svg { @apply text-accent; }
+
+  .dashboard-grid { @apply grid grid-cols-[minmax(0,1.7fr)_minmax(285px,.8fr)] gap-[15px]; }
+  .panel { @apply rounded-lg border border-line bg-paper shadow-[0_18px_55px_rgba(38,47,40,.07)]; }
+  .trend-panel, .aging-panel { @apply min-h-[380px] px-[22px] pb-[15px] pt-[23px]; }
+  .budget-panel { @apply col-span-full p-[22px]; }
+  .panel-heading { @apply flex items-start justify-between gap-4; }
+  .panel-heading h2 { @apply mt-1 text-base font-bold tracking-tight; }
+  .legend { @apply flex gap-3.5 text-[11px] font-medium text-muted; }
+  .legend span { @apply flex items-center gap-1; }
+  .dot { @apply size-[7px] rounded-full; }
+  .dot.revenue { @apply bg-brand; }
+  .dot.expense { @apply bg-accent; }
+  .chart-wrap { @apply mt-5 h-[290px]; }
+  .aging-total { @apply mb-2 mt-7; }
+  .aging-total strong { @apply block font-display text-3xl font-normal; }
+  .aging-total span { @apply text-[11px] text-muted; }
+  .aging-chart { @apply -ml-2.5 h-[220px]; }
+  .period-chip { @apply rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-muted; }
+  .budget-list { @apply mt-6 grid grid-cols-2 gap-x-10 gap-y-5; }
+  .budget-row { @apply grid grid-cols-[minmax(150px,1fr)_50px] items-center gap-x-3 gap-y-2; }
+  .budget-meta { @apply col-span-full flex justify-between gap-4 text-xs; }
+  .budget-meta span { @apply text-muted; }
+  .progress-track { @apply h-[7px] overflow-hidden rounded-full bg-stone-200; }
+  .progress-track span { @apply block h-full rounded-full bg-brand; }
+  .progress-track .near-limit { @apply bg-accent; }
+  .budget-percent { @apply text-right text-xs font-medium text-muted; }
+
+  .table-panel { @apply overflow-hidden; }
+  .table-panel > .panel-heading { @apply px-[22px] pb-3 pt-[22px]; }
+  .table-tools { @apply flex items-center gap-2.5 border-b border-line px-[18px] py-3.5; }
+  .invoice-search { @apply min-w-64 flex-1; }
+  .record-count { @apply ml-auto text-xs font-medium text-muted; }
+  .table-scroll { @apply overflow-x-auto; }
+  table { @apply w-full border-collapse text-xs; }
+  th { @apply border-b border-line bg-stone-50 px-[18px] py-[11px] text-left text-[10px] font-bold uppercase tracking-[1px] text-stone-600; }
+  td { @apply whitespace-nowrap border-b border-stone-200 px-[18px] py-[15px] text-stone-600; }
+  tbody tr:last-child td { @apply border-b-0; }
+  tbody tr:hover td { @apply bg-stone-50/70; }
+  td strong { @apply text-ink; }
+  .numeric { @apply text-right tabular-nums; }
+  .outstanding { @apply font-semibold text-accent; }
+  .status-badge { @apply inline-flex rounded-lg bg-stone-200 px-2 py-1 text-[10px] font-bold tracking-wide text-stone-700; }
+  .status-paid, .status-succeeded, .status-resolved { @apply bg-emerald-100 text-emerald-800; }
+  .status-overdue, .status-failed, .status-bounced, .status-complained { @apply bg-red-100 text-red-800; }
+  .status-partial, .status-running { @apply bg-amber-100 text-amber-800; }
+  .status-open, .status-queued, .status-deferred { @apply bg-slate-100 text-slate-700; }
+  .status-delivered { @apply bg-emerald-100 text-emerald-800; }
+  .empty-table { @apply p-8 text-center text-xs text-muted; }
+  .row-action { @apply w-[92px] text-right; }
+  .row-action button { @apply py-1.5; }
+  .table-pagination { @apply flex items-center justify-end gap-2 border-t border-line px-[18px] py-3 text-xs font-medium text-muted; }
+  .table-pagination button { @apply size-8 p-0; }
+  .page-size { @apply mr-auto flex items-center gap-2; }
+  .page-size select { @apply w-[68px] py-1.5; }
+  .header-actions { @apply flex items-center gap-2; }
+  .table-subtext { @apply mt-1.5 flex items-center gap-1 text-[10px] font-medium leading-relaxed text-muted; }
+
+  .invoice-dialog { @apply relative z-50; }
+  .invoice-dialog-backdrop { @apply fixed inset-0 bg-brand-deep/45 backdrop-blur-[2px] transition-opacity duration-300 ease-out data-closed:opacity-0; }
+  .invoice-dialog-positioner { @apply fixed inset-0 flex justify-end overflow-hidden; }
+  .invoice-dialog-panel { @apply h-full w-full max-w-[760px] overflow-y-auto overscroll-contain border-l border-line bg-paper shadow-[-20px_0_70px_rgba(20,39,31,.22)] transition duration-300 ease-out data-closed:translate-x-full; }
+  .invoice-dialog-heading { @apply sticky top-0 z-10 grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line bg-paper px-6 py-5; }
+  .invoice-dialog-heading h2 { @apply mb-0 mt-1 font-display text-[28px] font-medium leading-none; }
+  .invoice-dialog-title-icon { @apply grid size-10 place-items-center rounded-lg bg-emerald-100 text-brand; }
+  .invoice-dialog-close { @apply size-10 !rounded-none !bg-transparent !p-0 text-stone-500 shadow-none hover:!bg-transparent hover:!text-ink; }
+  .invoice-tabbed-panel { @apply flex flex-col overflow-hidden; }
+  .invoice-tabbed-panel > .invoice-dialog-heading { @apply static shrink-0; }
+  .invoice-tabs { @apply flex min-h-0 flex-1 flex-col; }
+  .invoice-tab-list { @apply flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-stone-50/70 px-6 pt-2; }
+  .invoice-tab { @apply whitespace-nowrap rounded-t-xl rounded-b-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-xs font-semibold text-muted outline-none transition hover:bg-white hover:text-ink data-selected:border-brand data-selected:bg-paper data-selected:text-brand focus-visible:ring-2 focus-visible:ring-emerald-700/20; }
+  .invoice-tab-panels { @apply min-h-0 flex-1 overflow-y-auto overscroll-contain; }
+  .invoice-tab-panel { @apply min-h-full outline-none; }
+  .invoice-tab-panel > .payment-panel, .invoice-tab-panel > .adjustment-panel, .invoice-tab-panel > .invoice-audit { @apply border-t-0; }
+  .invoice-form { @apply p-6; }
+  .invoice-form-grid { @apply mb-6 grid grid-cols-2 gap-x-5 gap-y-6; }
+  .derived-field { @apply flex min-h-[64px] flex-col justify-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5; }
+  .derived-field > span { @apply text-xs font-semibold text-stone-800; }
+  .derived-field > strong { @apply text-xs text-brand; }
+  .derived-field > small { @apply text-[10px] font-medium text-muted; }
+  .invoice-dialog-actions { @apply mt-6 flex items-center justify-end gap-3; }
+  .payment-panel { @apply border-t border-line px-6 py-5; }
+  .payment-panel-heading { @apply flex items-center justify-between gap-3; }
+  .payment-panel-heading > div { @apply flex items-center gap-2 text-xs; }
+  .payment-panel-heading svg { @apply text-brand; }
+  .payment-panel-heading > span { @apply text-xs font-semibold text-accent; }
+  .payment-empty { @apply mt-3 text-xs text-muted; }
+  .payment-list { @apply mt-4 flex flex-col gap-3; }
+  .payment-row { @apply grid grid-cols-[1fr_1fr_auto] items-center gap-4 rounded-lg border border-line bg-stone-50/60 px-4 py-3; }
+  .payment-row > div { @apply flex min-w-0 flex-col gap-1; }
+  .payment-row strong { @apply text-xs; }
+  .payment-row span { @apply truncate text-[10px] font-medium text-muted; }
+  .payment-row > svg { @apply text-brand; }
+  .payment-reversed { @apply opacity-60; }
+  .payment-reversed strong { @apply line-through decoration-stone-400; }
+  .payment-form { @apply mt-5 rounded-lg border border-line bg-stone-50/70 p-5; }
+  .payment-form-grid { @apply mb-5 grid grid-cols-3 gap-x-4 gap-y-5; }
+  .payment-form-action { @apply mt-5 flex items-center justify-between gap-4; }
+  .payment-form-action small { @apply flex items-center gap-1.5 text-[10px] font-medium text-muted; }
+  .payment-locked { @apply mt-3 flex items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-[11px] font-medium text-muted; }
+  .adjustment-panel { @apply border-t border-line px-6 py-5; }
+  .adjustment-heading { @apply flex items-center justify-between gap-3; }
+  .adjustment-heading > div { @apply flex items-center gap-2 text-xs; }
+  .adjustment-heading svg { @apply text-brand; }
+  .adjustment-heading > span { @apply text-[11px] font-semibold text-muted; }
+  .adjustment-row { @apply mt-4 rounded-lg border border-line bg-stone-50/60 p-4; }
+  .adjustment-row-summary { @apply grid grid-cols-[1fr_auto] items-start gap-x-4 gap-y-2; }
+  .adjustment-row-summary > div { @apply flex items-center gap-2; }
+  .adjustment-row-summary > div > strong { @apply text-xs; }
+  .adjustment-row-summary > strong { @apply text-xs font-semibold tabular-nums; }
+  .adjustment-row-summary > small { @apply col-span-full text-[10px] font-medium leading-relaxed text-muted; }
+  .adjustment-row-summary > p { @apply col-span-full m-0 text-[11px] leading-relaxed text-stone-800; }
+  .adjustment-review-note { @apply mt-2 flex items-start gap-2 border-t border-line pt-3 leading-relaxed text-muted; }
+  .adjustment-actions { @apply mt-4 flex justify-end gap-3; }
+  .adjustment-actions button { @apply py-1.5; }
+  .separation-note { @apply mt-3 block text-[10px] font-medium leading-relaxed text-muted; }
+  .adjustment-form, .adjustment-decision { @apply mt-5 grid grid-cols-2 gap-x-4 gap-y-5 rounded-lg border border-line bg-stone-50/70 p-5; }
+  .adjustment-form > :nth-child(n+3), .adjustment-decision > * { @apply col-span-full; }
+  .invoice-audit { @apply border-t border-line bg-stone-50/70 px-6 py-5; }
+  .invoice-audit > p { @apply mt-3 text-xs text-muted; }
+  .invoice-audit-heading { @apply flex items-center gap-2 text-xs text-ink; }
+  .invoice-audit-heading svg { @apply text-brand; }
+  .invoice-audit-event { @apply mt-4 grid grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-2 rounded-lg border border-line bg-paper px-4 py-3.5 text-xs; }
+  .invoice-audit-event > span { @apply text-[10px] font-bold uppercase tracking-wide text-brand; }
+  .invoice-audit-event > strong { @apply truncate; }
+  .invoice-audit-event > small { @apply text-muted; }
+  .invoice-audit-event > p { @apply col-span-full mb-0 mt-2 border-t border-line pt-2 leading-relaxed text-muted; }
+  .client-dialog-panel { @apply max-w-[820px]; }
+  .client-form-grid { @apply mb-5 grid grid-cols-2 gap-x-5 gap-y-6; }
+  .form-section-title { @apply mb-4 mt-2 text-xs font-bold; }
+  .contact-panel { @apply border-t border-line bg-stone-50/60 px-6 py-5; }
+  .contact-heading { @apply mb-4 flex items-center justify-between text-xs; }
+  .contact-heading span { @apply text-[11px] font-medium text-muted; }
+  .contact-row { @apply mb-3 grid w-full grid-cols-[1fr_1.2fr_.8fr_auto] items-center gap-4 rounded-lg border border-line bg-paper px-4 py-3 text-left; }
+  .contact-row > span { @apply flex min-w-0 items-center gap-1.5 truncate text-[11px] font-medium text-muted; }
+  .contact-row strong { @apply truncate text-xs text-ink; }
+  .contact-row small { @apply truncate text-[10px] font-medium text-muted; }
+  .contact-row svg { @apply text-brand; }
+  .contact-form { @apply mt-5 rounded-lg border border-line bg-paper p-5; }
+  .reminder-summary { @apply mb-4 flex items-center gap-3 p-5; }
+  .reminder-summary > svg { @apply text-brand; }
+  .reminder-summary > div { @apply flex flex-col; }
+  .reminder-summary strong { @apply text-sm; }
+  .reminder-summary span { @apply text-[11px] text-muted; }
+  .reminder-summary small { @apply ml-auto rounded-lg bg-emerald-100 px-3 py-1.5 text-[11px] font-semibold text-emerald-900; }
+
+  .project-overview-grid { @apply mb-[15px] grid grid-cols-4 gap-[13px]; }
+  .project-overview-grid > div { @apply flex flex-col gap-2 p-5; }
+  .project-overview-grid span { @apply text-xs text-muted; }
+  .project-overview-grid strong { @apply font-display text-2xl font-normal; }
+  .project-create-panel { @apply max-w-[760px]; }
+  .project-policy-note { @apply rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs leading-relaxed text-brand; }
+  .project-detail-panel { @apply max-w-[920px]; }
+  .project-detail-content { @apply p-6; }
+  .project-hero { @apply flex items-start justify-between gap-5; }
+  .project-hero h2 { @apply mb-1 mt-2 font-display text-3xl font-medium; }
+  .project-hero p { @apply m-0 text-xs text-muted; }
+  .project-value-grid { @apply my-6 grid grid-cols-5 gap-3; }
+  .project-value-grid > div { @apply flex flex-col rounded-lg border border-line bg-stone-50/70 p-3; }
+  .project-value-grid span { @apply text-[10px] font-semibold text-muted; }
+  .project-value-grid strong { @apply mt-1 text-xs tabular-nums text-ink; }
+  .project-section { @apply border-t border-line py-5; }
+  .project-section-heading { @apply mb-4 flex items-center justify-between gap-4 text-xs; }
+  .project-section-heading > div { @apply flex items-center gap-2; }
+  .project-section-heading svg { @apply text-brand; }
+  .project-section-heading > span { @apply text-[10px] text-muted; }
+  .project-review-note { @apply mb-3 rounded-lg bg-stone-100 px-3 py-2 text-xs leading-relaxed text-stone-700; }
+  .project-inline-form { @apply mb-5 grid grid-cols-3 gap-4 rounded-lg border border-line bg-stone-50/70 p-5; }
+  .project-record-list { @apply flex flex-col gap-2; }
+  .project-record { @apply grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-4 rounded-lg border border-line bg-paper px-4 py-3; }
+  .project-record > div { @apply flex min-w-0 flex-col gap-1; }
+  .project-record > div strong { @apply truncate text-xs; }
+  .project-record > div span { @apply truncate text-xs text-stone-700; }
+  .project-record > div small { @apply text-[10px] text-muted; }
+  .project-record > strong { @apply text-xs tabular-nums; }
+  .negative-money { @apply text-red-700; }
+  .project-empty { @apply m-0 text-xs text-muted; }
+  .project-audit { @apply pb-0; }
+  .project-audit-row { @apply grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-stone-200 py-3 text-xs; }
+  .project-audit-action { @apply text-[10px] font-bold uppercase tracking-wide text-brand; }
+  .project-audit-row span:last-child { @apply text-[10px] text-muted; }
+  .project-nested-dialog { @apply relative z-[60]; }
+  .project-nested-backdrop { @apply fixed inset-0 bg-brand-deep/50 backdrop-blur-[2px]; }
+  .project-nested-positioner { @apply fixed inset-0 grid place-items-center p-4; }
+  .project-nested-panel { @apply w-full max-w-lg rounded-lg border border-line bg-paper p-6 shadow-[0_24px_80px_rgba(20,39,31,.28)]; }
+  .project-nested-panel h2 { @apply m-0 font-display text-2xl font-medium; }
+  .project-nested-panel > p { @apply mb-5 mt-2 text-xs leading-relaxed text-muted; }
+  .project-invoice-grid { @apply grid grid-cols-2 gap-4; }
+  .project-invoice-grid > :first-child { @apply col-span-full; }
+
+  .review-layout { @apply grid grid-cols-[minmax(0,1.45fr)_minmax(310px,.75fr)] items-start gap-[15px]; }
+  .review-list { @apply overflow-hidden; }
+  .review-list > .panel-heading { @apply border-b border-line p-[22px]; }
+  .review-item { @apply grid w-full grid-cols-[8px_minmax(0,1fr)_auto_18px] items-center gap-3.5 rounded-lg border-0 border-b border-stone-200 bg-transparent px-5 py-[18px] text-left text-inherit hover:bg-stone-50; }
+  .review-item.selected { @apply bg-stone-50 shadow-[inset_3px_0_#1f7550]; }
+  .severity-mark { @apply size-[7px] rounded-full; }
+  .severity-high { @apply bg-red-600 ring-4 ring-red-100; }
+  .severity-medium { @apply bg-amber-600 ring-4 ring-amber-100; }
+  .severity-low { @apply bg-emerald-700 ring-4 ring-emerald-100; }
+  .review-copy { @apply flex min-w-0 flex-col gap-1.5; }
+  .review-copy small { @apply text-[10px] font-bold uppercase tracking-wide text-brand; }
+  .review-copy strong { @apply text-[13px]; }
+  .review-copy > span { @apply overflow-hidden text-ellipsis whitespace-nowrap text-xs text-muted; }
+  .review-amount { @apply text-xs tabular-nums; }
+  .resolution-panel { @apply sticky top-6 p-6; }
+  .resolution-panel h2 { @apply my-2 text-xl font-bold; }
+  .resolution-panel > p { @apply mb-5 text-xs leading-relaxed text-muted; }
+  .detail-grid { @apply grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 border-y border-line py-5 text-xs; }
+  .detail-grid span { @apply text-muted; }
+  .severity-text-high { @apply text-red-700; }
+  .severity-text-medium { @apply text-amber-700; }
+  .audit-hint { @apply mt-2.5 block text-center text-[10px] font-medium leading-relaxed text-muted; }
+  .form-error { @apply mt-3 text-xs font-medium leading-relaxed text-red-700; }
+  .select-prompt, .all-clear { @apply flex min-h-[250px] flex-col items-center justify-center gap-2 text-center text-muted; }
+  .select-prompt svg, .all-clear svg { @apply text-brand; }
+  .select-prompt strong, .all-clear strong { @apply text-[13px] text-ink; }
+  .select-prompt span, .all-clear span { @apply max-w-[230px] text-xs leading-relaxed; }
+  .resolved-summary { @apply flex items-center gap-2 bg-emerald-50 px-5 py-3 text-xs font-medium text-brand; }
+
+  .integration-card { @apply mb-[13px] flex items-center gap-4 rounded-lg border border-line bg-paper p-[23px]; }
+  .integration-icon { @apply grid size-12 shrink-0 place-items-center rounded-lg bg-emerald-700 text-sm font-bold text-white; }
+  .integration-card h2 { @apply mb-0.5 mt-1 text-base font-bold; }
+  .integration-card p { @apply m-0 text-xs text-muted; }
+  .integration-copy { @apply min-w-0 flex-1; }
+  .integration-actions { @apply ml-auto flex items-center gap-3; }
+  .connection-state { @apply flex items-center gap-2 text-xs font-semibold; }
+  .connection-state i { @apply size-1.5 rounded-full bg-emerald-400 ring-[3px] ring-emerald-400/10; }
+  .connection-state.is-connected { @apply text-brand; }
+  .connection-state.is-disconnected { @apply text-stone-500; }
+  .connection-state.is-disconnected i { @apply bg-stone-400 ring-stone-400/10; }
+  .integration-notice { @apply mb-3 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-xs; }
+  .integration-notice button { @apply ml-auto; }
+  .integration-notice-success { @apply border-emerald-200 bg-emerald-50 text-emerald-800; }
+  .integration-notice-error { @apply border-red-200 bg-red-50 text-red-800; }
+  .integration-inline-error { @apply -mt-1 mb-3 text-xs font-medium text-red-700; }
+  .sync-principles { @apply mb-[15px] grid grid-cols-3 gap-[13px]; }
+  .sync-principles > div { @apply grid grid-cols-[32px_1fr] gap-x-2.5 rounded-lg border border-line bg-paper/70 p-4; }
+  .sync-principles svg { @apply row-span-2 text-brand; }
+  .sync-principles strong { @apply text-xs; }
+  .sync-principles span { @apply mt-1 text-[10px] font-medium leading-relaxed text-muted; }
+  .success-copy { @apply inline-flex items-center gap-1.5 text-brand; }
+
+  .view-state { @apply flex min-h-[70vh] items-center justify-center gap-2.5 text-[13px] text-muted; }
+  .error-state div { @apply flex flex-col; }
+  .error-state strong { @apply text-ink; }
+  .error-state svg { @apply text-red-700; }
+  .spin { animation: spin .9s linear infinite; }
+
+  .login-page { @apply grid min-h-screen grid-cols-[minmax(420px,.9fr)_minmax(520px,1.1fr)] bg-paper; }
+  .login-story { @apply flex min-h-screen flex-col justify-between overflow-hidden bg-brand-deep px-[clamp(36px,6vw,88px)] py-[clamp(34px,6vw,72px)] text-emerald-50; }
+  .login-brand { @apply flex items-center gap-3 font-display text-[28px] tracking-wide; }
+  .login-story .eyebrow { @apply text-emerald-300; }
+  .login-story h1 { @apply mt-5 max-w-[600px] font-display text-[clamp(48px,5.2vw,76px)] font-medium leading-[.98] tracking-[-1.5px]; }
+  .login-story p { @apply mt-6 max-w-[520px] text-sm leading-7 text-emerald-100/80; }
+  .login-security { @apply flex items-center gap-2.5 border-t border-white/10 pt-5 text-xs text-emerald-100/75; }
+  .login-panel { @apply grid place-items-center bg-warm px-8 py-12; }
+  .login-card { @apply w-full max-w-[430px] rounded-lg border border-line bg-paper p-[clamp(28px,5vw,46px)] shadow-[0_28px_80px_rgba(25,39,31,.12)]; }
+  .login-card h2 { @apply mb-2 mt-2 font-display text-[36px] font-medium leading-tight; }
+  .login-card > p { @apply text-xs leading-relaxed text-muted; }
+  .login-form { @apply mt-8 flex flex-col gap-5; }
+  .login-form button[type="submit"] { @apply mt-1 py-3; }
+  .login-error { @apply rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700; }
+  .demo-access { @apply mt-6 flex items-center justify-between gap-3 border-t border-line pt-5; }
+  .demo-access > div { @apply flex items-center gap-2 text-brand; }
+  .demo-access span { @apply flex flex-col; }
+  .demo-access strong { @apply text-[11px] uppercase tracking-wide text-ink; }
+  .demo-access small { @apply text-[11px] text-muted; }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(-8px); } }
+
+@media (max-width: 1050px) {
+  .app-shell { @apply grid-cols-[210px_minmax(0,1fr)]; }
+  .metrics-grid { @apply grid-cols-2; }
+  .dashboard-grid { @apply grid-cols-1; }
+  .budget-panel { @apply col-auto; }
+  .review-layout { @apply grid-cols-1; }
+  .project-overview-grid { @apply grid-cols-2; }
+  .project-value-grid { @apply grid-cols-3; }
+  .resolution-panel { @apply static; }
+}
+
+@media (max-width: 760px) {
+  .app-shell { @apply block; }
+  .sidebar { @apply static h-auto w-full p-3.5; }
+  .brand { @apply px-1 pb-3; }
+  .sidebar nav { @apply flex-row overflow-x-auto; }
+  .nav-link { @apply shrink-0 px-3 py-2; }
+  .nav-count { @apply hidden; }
+  .main-content-header-inner { @apply h-14 px-4; }
+  .user-menu-copy { @apply hidden; }
+  .page { @apply px-4 pb-14 pt-7; }
+  .page-header { @apply mb-6 flex-col items-start; }
+  .page-header h1 { @apply text-[34px]; }
+  .header-action, .header-action > * { @apply w-full; }
+  .header-actions { @apply flex-col; }
+  .invoice-search { @apply min-w-full; }
+  .table-pagination { @apply flex-wrap justify-start; }
+  .page-size { @apply w-full; }
+  .invoice-dialog-panel { @apply max-w-full; }
+  .invoice-dialog-heading, .invoice-form, .payment-panel, .adjustment-panel, .invoice-audit { @apply px-4; }
+  .invoice-form-grid { @apply grid-cols-1; }
+  .client-form-grid { @apply grid-cols-1; }
+  .contact-panel { @apply px-4; }
+  .contact-row { @apply grid-cols-1; }
+  .payment-form-grid { @apply grid-cols-1; }
+  .adjustment-form { @apply grid-cols-1; }
+  .adjustment-form > * { @apply col-span-full; }
+  .payment-form-action { @apply items-end; }
+  .payment-form-action small { @apply max-w-[180px]; }
+  .invoice-audit-event { @apply grid-cols-1 gap-y-1; }
+  .invoice-audit-event > p { @apply col-auto; }
+  .metrics-grid, .budget-list, .sync-principles { @apply grid-cols-1; }
+  .project-overview-grid, .project-value-grid, .project-inline-form, .project-invoice-grid { @apply grid-cols-1; }
+  .project-record { @apply grid-cols-1; }
+  .project-invoice-grid > :first-child { @apply col-auto; }
+  .legend { @apply hidden; }
+  .table-tools { @apply flex-wrap; }
+  .record-count { @apply ml-0; }
+  .review-item { @apply grid-cols-[8px_minmax(0,1fr)_18px]; }
+  .review-amount { @apply hidden; }
+  .integration-card { @apply flex-wrap items-start; }
+  .integration-actions { @apply ml-16 w-full flex-wrap; }
+  .login-page { @apply block; }
+  .login-story { @apply min-h-0 px-6 py-7; }
+  .login-story > div:nth-child(2), .login-security { @apply hidden; }
+  .login-panel { @apply min-h-[calc(100vh-96px)] px-4 py-7; }
+  .login-card { @apply p-6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

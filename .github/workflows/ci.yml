@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache-dependency-path: backend/go.sum
+      - run: go test ./...
+      - run: go vet ./...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache-dependency-path: backend/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Prepare native PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres createuser --superuser runner || true
+          createdb ledgerops
+      - name: Start native application processes
+        run: |
+          nohup env DATABASE_URL='postgres:///ledgerops?host=/var/run/postgresql' SEED_DEMO=true go run ./cmd/api >/tmp/ledgerops-api.log 2>&1 &
+          nohup env DATABASE_URL='postgres:///ledgerops?host=/var/run/postgresql' go run ./cmd/worker >/tmp/ledgerops-worker.log 2>&1 &
+          nohup npm --prefix ../frontend run dev -- --host 127.0.0.1 >/tmp/ledgerops-web.log 2>&1 &
+        working-directory: backend
+      - name: Wait for application
+        run: curl --retry 30 --retry-connrefused --retry-delay 1 http://127.0.0.1:8080/healthz
+      - run: npx playwright test
+        working-directory: frontend
+      - if: always()
+        run: |
+          tail -n 200 /tmp/ledgerops-api.log || true
+          tail -n 200 /tmp/ledgerops-worker.log || true
+          tail -n 200 /tmp/ledgerops-web.log || true
