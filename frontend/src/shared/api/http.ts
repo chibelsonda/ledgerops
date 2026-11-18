@@ -1,5 +1,7 @@
 import { emitToast } from '@/shared/lib/toast'
 
+const API_BASE_PATH = '/api/v1'
+
 let csrfToken = ''
 
 export function setCSRFToken(value: string) {
@@ -20,7 +22,10 @@ interface ApiErrorBody {
 interface ApiRequestOptions extends RequestInit {
   successMessage?: string
   suppressToast?: boolean
+  suppressErrorToast?: boolean
 }
+
+type FormRequestOptions = Omit<ApiRequestOptions, 'suppressErrorToast'>
 
 function defaultSuccessMessage(method: string) {
   if (method === 'DELETE') return 'Deleted successfully.'
@@ -28,13 +33,17 @@ function defaultSuccessMessage(method: string) {
   return 'Request completed successfully.'
 }
 
+function apiPath(path: string) {
+  return `${API_BASE_PATH}${path.startsWith('/') ? path : `/${path}`}`
+}
+
 export async function apiRequest<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const method = options?.method?.toUpperCase() ?? 'GET'
   const requiresCSRF = !['GET', 'HEAD', 'OPTIONS'].includes(method)
-  const { successMessage, suppressToast, ...requestOptions } = options ?? {}
+  const { successMessage, suppressToast, suppressErrorToast, ...requestOptions } = options ?? {}
   let response: Response
   try {
-    response = await fetch(path, {
+    response = await fetch(apiPath(path), {
       ...requestOptions,
       credentials: 'include',
       headers: {
@@ -44,7 +53,7 @@ export async function apiRequest<T>(path: string, options?: ApiRequestOptions): 
       },
     })
   } catch (error) {
-    if (!(error instanceof DOMException && error.name === 'AbortError') && !suppressToast) {
+    if (!(error instanceof DOMException && error.name === 'AbortError') && !suppressToast && !suppressErrorToast) {
       emitToast({ tone: 'error', message: 'Unable to reach the server. Check your connection and try again.' })
     }
     throw error
@@ -52,8 +61,8 @@ export async function apiRequest<T>(path: string, options?: ApiRequestOptions): 
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as ApiErrorBody
     const message = body.error?.message ?? `Request failed with status ${response.status}`
-    if (!suppressToast) emitToast({ tone: 'error', message })
-    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
+    if (!suppressToast && !suppressErrorToast) emitToast({ tone: 'error', message })
+    if (response.status === 401 && !path.startsWith('/auth/')) {
       setCSRFToken('')
       window.dispatchEvent(new Event('ledgerops:unauthorized'))
     }
@@ -64,4 +73,8 @@ export async function apiRequest<T>(path: string, options?: ApiRequestOptions): 
     emitToast({ tone: 'success', message: successMessage ?? defaultSuccessMessage(method) })
   }
   return result
+}
+
+export function apiFormRequest<T>(path: string, options?: FormRequestOptions): Promise<T> {
+  return apiRequest<T>(path, { ...options, suppressErrorToast: true })
 }

@@ -2,7 +2,6 @@ package forecast
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +11,14 @@ import (
 	"gorm.io/gorm"
 )
 
-type PostgresRepository struct{ db *gorm.DB }
+type PostgresRepository struct {
+	db  *gorm.DB
+	now func() time.Time
+}
 
-func NewPostgresRepository(db *gorm.DB) *PostgresRepository { return &PostgresRepository{db: db} }
+func NewPostgresRepository(db *gorm.DB) *PostgresRepository {
+	return &PostgresRepository{db: db, now: time.Now}
+}
 
 const scenarioProjection = `SELECT s.id::text AS id,s.name,s.collection_rate_bps,s.collection_delay_days,s.expense_growth_bps,s.milestone_probability_bps,u.email AS created_by,to_char(s.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at FROM cash_flow_scenarios s JOIN users u ON u.id=s.created_by`
 
@@ -40,7 +44,7 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID, scenarioID
 	}
 	result.CurrencyCode = organization.CurrencyCode
 	var opening struct{ OpeningCashMinor int64 }
-	if err := r.db.WithContext(ctx).Raw(`SELECT ((SELECT COALESCE(SUM(amount_minor),0)::bigint FROM payments WHERE organization_id=@organization_id)-(SELECT COALESCE(SUM(amount_minor),0)::bigint FROM invoice_adjustments WHERE organization_id=@organization_id AND kind='payment_reversal' AND status='approved')-(SELECT COALESCE(SUM(amount_minor),0)::bigint FROM expenses WHERE organization_id=@organization_id))::bigint AS opening_cash_minor`, sql.Named("organization_id", organizationID)).Scan(&opening).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(`SELECT ((SELECT COALESCE(SUM(paid_minor),0)::bigint FROM invoice_balances WHERE organization_id=?)-(SELECT COALESCE(SUM(amount_minor),0)::bigint FROM expenses WHERE organization_id=?))::bigint AS opening_cash_minor`, organizationID, organizationID).Scan(&opening).Error; err != nil {
 		return result, fmt.Errorf("calculate opening cash: %w", err)
 	}
 	result.OpeningCashMinor = opening.OpeningCashMinor
@@ -51,16 +55,13 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID, scenarioID
 	}
 	items := make([]projectedItem, 0)
 	if err := r.db.WithContext(ctx).Raw(`
-		WITH paid AS (SELECT p.invoice_id,(SUM(p.amount_minor)-COALESCE(MAX(rev.total),0))::bigint AS total FROM payments p LEFT JOIN (SELECT invoice_id,SUM(amount_minor)::bigint AS total FROM invoice_adjustments WHERE organization_id=? AND kind='payment_reversal' AND status='approved' GROUP BY invoice_id) rev ON rev.invoice_id=p.invoice_id WHERE p.organization_id=? GROUP BY p.invoice_id),
-		credits AS (SELECT invoice_id,SUM(amount_minor)::bigint AS total FROM invoice_adjustments WHERE organization_id=? AND kind='credit_note' AND status='approved' GROUP BY invoice_id)
-		SELECT to_char(GREATEST(i.due_on + (? * interval '1 day'),CURRENT_DATE),'YYYY-MM-DD') AS expected_on,'invoice' AS source,(GREATEST(i.amount_minor-COALESCE(p.total,0)-COALESCE(c.total,0),0)*?/10000)::bigint AS amount_minor
-		FROM invoices i LEFT JOIN paid p ON p.invoice_id=i.id LEFT JOIN credits c ON c.invoice_id=i.id
+		SELECT to_char(GREATEST(i.due_on + (? * interval '1 day'),CURRENT_DATE),'YYYY-MM-DD') AS expected_on,'invoice' AS source,(b.outstanding_minor*?/10000)::bigint AS amount_minor
+		FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id AND b.organization_id=i.organization_id
 		WHERE i.organization_id=? AND i.status IN ('open','partial','overdue')
 		UNION ALL
 		SELECT to_char(GREATEST(m.due_on + (? * interval '1 day'),CURRENT_DATE),'YYYY-MM-DD'),'project',(m.amount_minor*?/10000)::bigint
 		FROM billing_milestones m JOIN project_contracts pc ON pc.id=m.contract_id
 		WHERE m.organization_id=? AND m.status='planned' AND pc.status='approved'`,
-		organizationID, organizationID, organizationID,
 		result.Scenario.CollectionDelayDays, result.Scenario.CollectionRateBPS, organizationID,
 		result.Scenario.CollectionDelayDays, result.Scenario.MilestoneProbabilityBPS, organizationID,
 	).Scan(&items).Error; err != nil {
@@ -78,7 +79,7 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID, scenarioID
 		return result, fmt.Errorf("list forecast adjustments: %w", err)
 	}
 
-	start := monday(time.Now().UTC())
+	start := monday(r.now().UTC())
 	result.Weeks = make([]Week, 13)
 	for index := range result.Weeks {
 		result.Weeks[index].WeekStart = start.AddDate(0, 0, index*7).Format(time.DateOnly)

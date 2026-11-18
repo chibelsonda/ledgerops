@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -45,7 +46,16 @@ func ValidPrincipal(principal identity.Principal) bool {
 func DecodeJSON(w http.ResponseWriter, r *http.Request, destination any, maxBytes int64) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	decoder.DisallowUnknownFields()
-	return decoder.Decode(destination)
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("request body must contain a single JSON value")
+		}
+		return err
+	}
+	return nil
 }
 
 func WriteJSON(w http.ResponseWriter, status int, value any) {

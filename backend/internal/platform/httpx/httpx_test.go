@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,29 @@ import (
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 )
+
+func TestDecodeJSONRejectsTrailingJSONValue(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/things", bytes.NewBufferString(`{"name":"first"}{"name":"second"}`))
+	response := httptest.NewRecorder()
+	var input struct{ Name string `json:"name"` }
+
+	if err := DecodeJSON(response, request, &input, 1024); err == nil {
+		t.Fatal("DecodeJSON accepted multiple JSON values")
+	}
+}
+
+func TestDecodeJSONAcceptsOneValueAndWhitespace(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/things", bytes.NewBufferString("{\"name\":\"only\"} \n\t"))
+	response := httptest.NewRecorder()
+	var input struct{ Name string `json:"name"` }
+
+	if err := DecodeJSON(response, request, &input, 1024); err != nil {
+		t.Fatalf("DecodeJSON() error = %v", err)
+	}
+	if input.Name != "only" {
+		t.Fatalf("name = %q, want only", input.Name)
+	}
+}
 
 const (
 	testOrganizationID = "11111111-1111-4111-8111-111111111111"

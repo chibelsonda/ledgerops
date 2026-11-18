@@ -49,22 +49,12 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID string) (Vi
 
 func (r *PostgresRepository) loadMetrics(ctx context.Context, organizationID string, metrics *Metrics) error {
 	err := r.db.WithContext(ctx).Raw(`
-		WITH paid AS (
-			SELECT p.invoice_id, (SUM(p.amount_minor) - COALESCE(MAX(reversed.total), 0))::bigint AS paid_minor
-			FROM payments p
-			LEFT JOIN (SELECT invoice_id, SUM(amount_minor)::bigint AS total FROM invoice_adjustments WHERE organization_id = @organization_id AND kind = 'payment_reversal' AND status = 'approved' GROUP BY invoice_id) reversed ON reversed.invoice_id = p.invoice_id
-			WHERE p.organization_id = @organization_id GROUP BY p.invoice_id
-		), credits AS (
-			SELECT invoice_id, SUM(amount_minor)::bigint AS credit_minor FROM invoice_adjustments
-			WHERE organization_id = @organization_id AND kind = 'credit_note' AND status = 'approved' GROUP BY invoice_id
-		)
 		SELECT
-			((SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM payments WHERE organization_id = @organization_id)
-			 - (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM invoice_adjustments WHERE organization_id = @organization_id AND kind = 'payment_reversal' AND status = 'approved'))
-			 - (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id) AS cash_position_minor,
-			(SELECT COALESCE(SUM(i.amount_minor - COALESCE(c.credit_minor, 0)), 0)::bigint FROM invoices i LEFT JOIN credits c ON c.invoice_id = i.id WHERE i.organization_id = @organization_id AND i.issued_on >= date_trunc('month', CURRENT_DATE)) AS revenue_mtd_minor,
-			(SELECT COALESCE(SUM(GREATEST(i.amount_minor - COALESCE(c.credit_minor, 0) - COALESCE(p.paid_minor, 0), 0)), 0)::bigint
-			 FROM invoices i LEFT JOIN paid p ON p.invoice_id = i.id LEFT JOIN credits c ON c.invoice_id = i.id
+			(SELECT COALESCE(SUM(paid_minor), 0)::bigint FROM invoice_balances WHERE organization_id = @organization_id)
+				 - (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id) AS cash_position_minor,
+			(SELECT COALESCE(SUM(b.effective_amount_minor), 0)::bigint FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id WHERE i.organization_id = @organization_id AND i.issued_on >= date_trunc('month', CURRENT_DATE)) AS revenue_mtd_minor,
+			(SELECT COALESCE(SUM(b.outstanding_minor), 0)::bigint
+			 FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id
 			 WHERE i.organization_id = @organization_id AND i.status IN ('open', 'partial', 'overdue')) AS outstanding_ar_minor,
 			(SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id AND incurred_on >= date_trunc('month', CURRENT_DATE)) AS expenses_mtd_minor,
 			(SELECT COUNT(*)::int FROM reconciliation_items WHERE organization_id = @organization_id AND status = 'open') AS open_review_count`,
@@ -81,12 +71,9 @@ func (r *PostgresRepository) loadTrend(ctx context.Context, organizationID strin
 	err := r.db.WithContext(ctx).Raw(`
 		WITH months AS (
 			SELECT generate_series(date_trunc('month', CURRENT_DATE) - interval '5 months', date_trunc('month', CURRENT_DATE), interval '1 month')::date AS month_start
-		), credits AS (
-			SELECT invoice_id, SUM(amount_minor)::bigint AS total FROM invoice_adjustments
-			WHERE organization_id = @organization_id AND kind = 'credit_note' AND status = 'approved' GROUP BY invoice_id
 		), revenue AS (
-			SELECT date_trunc('month', i.issued_on)::date AS month_start, SUM(i.amount_minor - COALESCE(c.total, 0))::bigint AS total
-			FROM invoices i LEFT JOIN credits c ON c.invoice_id = i.id WHERE i.organization_id = @organization_id GROUP BY 1
+			SELECT date_trunc('month', i.issued_on)::date AS month_start, SUM(b.effective_amount_minor)::bigint AS total
+			FROM invoices i JOIN invoice_balances b ON b.invoice_id = i.id WHERE i.organization_id = @organization_id GROUP BY 1
 		), spend AS (
 			SELECT date_trunc('month', incurred_on)::date AS month_start, SUM(amount_minor)::bigint AS total
 			FROM expenses WHERE organization_id = @organization_id GROUP BY 1
@@ -124,17 +111,11 @@ func (r *PostgresRepository) loadBudget(ctx context.Context, organizationID stri
 func (r *PostgresRepository) loadAging(ctx context.Context, organizationID string) ([]AgingBucket, error) {
 	buckets := make([]AgingBucket, 0, 4)
 	err := r.db.WithContext(ctx).Raw(`
-		WITH paid AS (
-			SELECT p.invoice_id, (SUM(p.amount_minor) - COALESCE(MAX(reversed.total), 0))::bigint AS paid_minor
-			FROM payments p LEFT JOIN (SELECT invoice_id, SUM(amount_minor)::bigint AS total FROM invoice_adjustments WHERE organization_id = @organization_id AND kind = 'payment_reversal' AND status = 'approved' GROUP BY invoice_id) reversed ON reversed.invoice_id = p.invoice_id
-			WHERE p.organization_id = @organization_id GROUP BY p.invoice_id
-		), credits AS (
-			SELECT invoice_id, SUM(amount_minor)::bigint AS credit_minor FROM invoice_adjustments WHERE organization_id = @organization_id AND kind = 'credit_note' AND status = 'approved' GROUP BY invoice_id
-		), open_invoices AS (
-			SELECT GREATEST(i.amount_minor - COALESCE(c.credit_minor, 0) - COALESCE(p.paid_minor, 0), 0)::bigint AS balance,
+		WITH open_invoices AS (
+			SELECT b.outstanding_minor AS balance,
 				CASE WHEN i.due_on >= CURRENT_DATE THEN 'Current' WHEN CURRENT_DATE - i.due_on <= 30 THEN '1–30 days' WHEN CURRENT_DATE - i.due_on <= 60 THEN '31–60 days' ELSE '61+ days' END AS bucket,
 				CASE WHEN i.due_on >= CURRENT_DATE THEN 1 WHEN CURRENT_DATE - i.due_on <= 30 THEN 2 WHEN CURRENT_DATE - i.due_on <= 60 THEN 3 ELSE 4 END AS position
-			FROM invoices i LEFT JOIN paid p ON p.invoice_id = i.id LEFT JOIN credits c ON c.invoice_id = i.id
+			FROM invoices i JOIN invoice_balances b ON b.invoice_id = i.id
 			WHERE i.organization_id = @organization_id AND i.status IN ('open', 'partial', 'overdue')
 		)
 		SELECT bucket, SUM(balance)::bigint AS amount_minor

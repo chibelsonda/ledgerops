@@ -210,12 +210,7 @@ type totals struct {
 
 func loadTotals(tx *gorm.DB, invoiceID string) (totals, error) {
 	var result totals
-	if err := tx.Raw(`
-		SELECT
-			COALESCE((SELECT SUM(amount_minor) FROM invoice_adjustments WHERE invoice_id = ? AND kind = 'credit_note' AND status = 'approved'), 0)::bigint AS approved_credits,
-			(COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id = ?), 0)
-			 - COALESCE((SELECT SUM(amount_minor) FROM invoice_adjustments WHERE invoice_id = ? AND kind = 'payment_reversal' AND status = 'approved'), 0))::bigint AS net_paid`,
-		invoiceID, invoiceID, invoiceID).Scan(&result).Error; err != nil {
+	if err := tx.Raw(`SELECT credit_minor AS approved_credits, paid_minor AS net_paid FROM invoice_balances WHERE invoice_id = ?`, invoiceID).Scan(&result).Error; err != nil {
 		return result, fmt.Errorf("load invoice adjustment totals: %w", err)
 	}
 	return result, nil
@@ -265,17 +260,14 @@ func (r *PostgresRepository) getInvoice(ctx context.Context, organizationID, inv
 	var result InvoiceSnapshot
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT i.id::text AS id, i.client_id::text AS client_id, i.invoice_number, c.name AS client_name,
-			i.status, i.currency_code, i.amount_minor,
-			(COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0))::bigint AS paid_minor,
-			GREATEST(i.amount_minor
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'credit_note' AND a.status = 'approved'), 0)
-			 - COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 + COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0), 0)::bigint AS outstanding_minor,
+			i.status, i.currency_code, i.amount_minor, b.paid_minor, b.outstanding_minor,
 			to_char(i.issued_on, 'YYYY-MM-DD') AS issued_on, to_char(i.due_on, 'YYYY-MM-DD') AS due_on, i.source,
 			to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
 			to_char(i.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
-		FROM invoices i JOIN clients c ON c.id = i.client_id WHERE i.id = ? AND i.organization_id = ?`, invoiceID, organizationID).Scan(&result).Error; err != nil {
+		FROM invoices i
+		JOIN clients c ON c.id = i.client_id
+		JOIN invoice_balances b ON b.invoice_id = i.id AND b.organization_id = i.organization_id
+		WHERE i.id = ? AND i.organization_id = ?`, invoiceID, organizationID).Scan(&result).Error; err != nil {
 		return result, fmt.Errorf("get adjusted invoice: %w", err)
 	}
 	if result.ID == "" {

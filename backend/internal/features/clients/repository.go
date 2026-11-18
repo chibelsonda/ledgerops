@@ -19,11 +19,9 @@ const clientProjection = `c.id::text AS id, c.name, c.payment_terms_days, c.remi
 	COALESCE((SELECT email FROM client_contacts WHERE client_id = c.id AND is_primary LIMIT 1), '') AS primary_email,
 	(SELECT COUNT(*)::int FROM client_contacts WHERE client_id = c.id) AS contact_count,
 	(SELECT COUNT(*)::int FROM invoices WHERE client_id = c.id) AS invoice_count,
-	COALESCE((SELECT SUM(GREATEST(i.amount_minor
-		- COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='credit_note' AND a.status='approved'),0)
-		- COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id=i.id),0)
-		+ COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='payment_reversal' AND a.status='approved'),0),0))
-	 FROM invoices i WHERE i.client_id=c.id AND i.status IN ('open','partial','overdue')),0)::bigint AS outstanding_minor,
+	COALESCE((SELECT SUM(b.outstanding_minor)
+	 FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id AND b.organization_id=i.organization_id
+	 WHERE i.client_id=c.id AND i.status IN ('open','partial','overdue')),0)::bigint AS outstanding_minor,
 	COALESCE((SELECT base_currency FROM organizations WHERE id=c.organization_id),'USD') AS currency_code,
 	to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
 	to_char(c.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at`

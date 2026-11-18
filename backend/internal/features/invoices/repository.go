@@ -22,6 +22,7 @@ func (r *PostgresRepository) List(ctx context.Context, organizationID string, pa
 	filters := r.db.WithContext(ctx).
 		Table("invoices i").
 		Joins("JOIN clients c ON c.id = i.client_id").
+		Joins("JOIN invoice_balances b ON b.invoice_id = i.id AND b.organization_id = i.organization_id").
 		Where("i.organization_id = ?", organizationID)
 	if params.Query != "" {
 		like := "%" + params.Query + "%"
@@ -39,13 +40,7 @@ func (r *PostgresRepository) List(ctx context.Context, organizationID string, pa
 	items := make([]Invoice, 0)
 	err := filters.
 		Select(`i.id::text AS id, i.client_id::text AS client_id, i.invoice_number, c.name AS client_name,
-			i.status, i.currency_code, i.amount_minor,
-			(COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0))::bigint AS paid_minor,
-			GREATEST(i.amount_minor
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'credit_note' AND a.status = 'approved'), 0)
-			 - COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 + COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0), 0)::bigint AS outstanding_minor,
+			i.status, i.currency_code, i.amount_minor, b.paid_minor, b.outstanding_minor,
 			to_char(i.issued_on, 'YYYY-MM-DD') AS issued_on,
 			to_char(i.due_on, 'YYYY-MM-DD') AS due_on,
 			i.source,
@@ -357,13 +352,7 @@ func (r *PostgresRepository) get(ctx context.Context, organizationID, invoiceID 
 	var invoice Invoice
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT i.id::text AS id, i.client_id::text AS client_id, i.invoice_number, c.name AS client_name,
-			i.status, i.currency_code, i.amount_minor,
-			(COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0))::bigint AS paid_minor,
-			GREATEST(i.amount_minor
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'credit_note' AND a.status = 'approved'), 0)
-			 - COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id = i.id), 0)
-			 + COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id = i.id AND a.kind = 'payment_reversal' AND a.status = 'approved'), 0), 0)::bigint AS outstanding_minor,
+			i.status, i.currency_code, i.amount_minor, b.paid_minor, b.outstanding_minor,
 			to_char(i.issued_on, 'YYYY-MM-DD') AS issued_on,
 			to_char(i.due_on, 'YYYY-MM-DD') AS due_on,
 			i.source,
@@ -371,6 +360,7 @@ func (r *PostgresRepository) get(ctx context.Context, organizationID, invoiceID 
 			to_char(i.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at
 		FROM invoices i
 		JOIN clients c ON c.id = i.client_id
+		JOIN invoice_balances b ON b.invoice_id = i.id AND b.organization_id = i.organization_id
 		WHERE i.id = ? AND i.organization_id = ?`, invoiceID, organizationID).Scan(&invoice).Error
 	if err != nil {
 		return Invoice{}, fmt.Errorf("get invoice: %w", err)
@@ -403,8 +393,7 @@ func (r *PostgresRepository) getPayment(ctx context.Context, organizationID, pay
 
 func sumNetPayments(tx *gorm.DB, invoiceID string) (int64, error) {
 	var total int64
-	if err := tx.Raw(`SELECT (COALESCE((SELECT SUM(amount_minor) FROM payments WHERE invoice_id = ?), 0)
-		- COALESCE((SELECT SUM(amount_minor) FROM invoice_adjustments WHERE invoice_id = ? AND kind = 'payment_reversal' AND status = 'approved'), 0))::bigint`, invoiceID, invoiceID).Scan(&total).Error; err != nil {
+	if err := tx.Raw(`SELECT paid_minor FROM invoice_balances WHERE invoice_id = ?`, invoiceID).Scan(&total).Error; err != nil {
 		return 0, fmt.Errorf("sum net invoice payments: %w", err)
 	}
 	return total, nil
@@ -412,7 +401,7 @@ func sumNetPayments(tx *gorm.DB, invoiceID string) (int64, error) {
 
 func sumApprovedCredits(tx *gorm.DB, invoiceID string) (int64, error) {
 	var total int64
-	if err := tx.Raw("SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM invoice_adjustments WHERE invoice_id = ? AND kind = 'credit_note' AND status = 'approved'", invoiceID).Scan(&total).Error; err != nil {
+	if err := tx.Raw("SELECT credit_minor FROM invoice_balances WHERE invoice_id = ?", invoiceID).Scan(&total).Error; err != nil {
 		return 0, fmt.Errorf("sum approved invoice credits: %w", err)
 	}
 	return total, nil

@@ -17,9 +17,18 @@ type ValidationError struct{ Message string }
 
 func (e ValidationError) Error() string { return e.Message }
 
-type Service struct{ repository Repository }
+type Service struct {
+	repository Repository
+	now        func() time.Time
+}
 
-func NewService(repository Repository) *Service { return &Service{repository: repository} }
+func NewService(repository Repository) *Service {
+	return &Service{repository: repository, now: time.Now}
+}
+
+func newServiceWithClock(repository Repository, now func() time.Time) *Service {
+	return &Service{repository: repository, now: now}
+}
 
 func (s *Service) ListScenarios(ctx context.Context, organizationID string) ([]Scenario, error) {
 	return s.repository.ListScenarios(ctx, organizationID)
@@ -65,7 +74,7 @@ func (s *Service) AddAdjustment(ctx context.Context, organizationID, scenarioID 
 	if err != nil || week.Weekday() != time.Monday {
 		return Forecast{}, ValidationError{Message: "Forecast week must be a Monday."}
 	}
-	start := monday(time.Now().UTC())
+	start := monday(s.now().UTC())
 	if week.Before(start) || week.After(start.AddDate(0, 0, 84)) {
 		return Forecast{}, ValidationError{Message: "Adjustment week must fall inside the 13-week forecast horizon."}
 	}

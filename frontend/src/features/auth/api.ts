@@ -1,4 +1,4 @@
-import { apiRequest, setCSRFToken } from '@/shared/api/http'
+import { apiFormRequest, apiRequest, setCSRFToken } from '@/shared/api/http'
 import type { LoginCredentials, Session } from './types'
 
 function rememberCSRF(session: Session) {
@@ -7,14 +7,14 @@ function rememberCSRF(session: Session) {
 }
 
 export const authApi = {
-  session: async () => rememberCSRF(await apiRequest<Session>('/api/v1/auth/session', { suppressToast: true })),
-  login: async (credentials: LoginCredentials) => rememberCSRF(await apiRequest<Session>('/api/v1/auth/login', {
+  session: async () => rememberCSRF(await apiRequest<Session>('/auth/session', { suppressToast: true })),
+  login: async (credentials: LoginCredentials) => rememberCSRF(await apiFormRequest<Session>('/auth/login', {
     method: 'POST',
     body: JSON.stringify(credentials),
     successMessage: 'Signed in successfully.',
   })),
   logout: async () => {
-    await apiRequest<void>('/api/v1/auth/logout', { method: 'POST', successMessage: 'Signed out successfully.' })
+    await apiRequest<void>('/auth/logout', { method: 'POST', successMessage: 'Signed out successfully.' })
     setCSRFToken('')
   },
 }

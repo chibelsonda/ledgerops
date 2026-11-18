@@ -19,14 +19,13 @@ func (r *PostgresRepository) List(ctx context.Context, organizationID string) ([
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT r.id::text AS id,r.invoice_id::text AS invoice_id,i.invoice_number,r.client_id::text AS client_id,c.name AS client_name,
 			cc.name AS contact_name,r.recipient_email,r.status,to_char(r.scheduled_for,'YYYY-MM-DD') AS scheduled_for,r.subject,r.message,
-			GREATEST(i.amount_minor
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='credit_note' AND a.status='approved'),0)
-			 - COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id=i.id),0)
-			 + COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='payment_reversal' AND a.status='approved'),0),0)::bigint AS outstanding_minor,
+			b.outstanding_minor,
 			i.currency_code,to_char(r.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
 			r.attempts,r.max_attempts,r.last_error,r.provider_message_id,
 			(SELECT e.event_type FROM reminder_delivery_events e WHERE e.reminder_id=r.id ORDER BY e.occurred_at DESC,e.received_at DESC LIMIT 1) AS delivery_event
-		FROM invoice_reminders r JOIN invoices i ON i.id=r.invoice_id JOIN clients c ON c.id=r.client_id JOIN client_contacts cc ON cc.id=r.contact_id
+		FROM invoice_reminders r JOIN invoices i ON i.id=r.invoice_id
+		JOIN invoice_balances b ON b.invoice_id=i.id AND b.organization_id=i.organization_id
+		JOIN clients c ON c.id=r.client_id JOIN client_contacts cc ON cc.id=r.contact_id
 		WHERE r.organization_id=? ORDER BY CASE r.status WHEN 'queued' THEN 0 ELSE 1 END,r.scheduled_for,r.created_at DESC`, organizationID).Scan(&items).Error; err != nil {
 		return nil, fmt.Errorf("list reminders: %w", err)
 	}
@@ -126,13 +125,12 @@ func (r *PostgresRepository) generate(ctx context.Context, organizationFilter st
 		SELECT i.organization_id,i.id,i.client_id,cc.id,1,'queued',CURRENT_DATE,cc.email,
 			'Payment reminder: ' || i.invoice_number,
 			'Hello ' || cc.name || ', invoice ' || i.invoice_number || ' is overdue. Please review the outstanding balance.'
-		FROM invoices i JOIN clients c ON c.id=i.client_id JOIN client_contacts cc ON cc.client_id=c.id AND cc.is_primary
+		FROM invoices i
+		JOIN invoice_balances b ON b.invoice_id=i.id AND b.organization_id=i.organization_id
+		JOIN clients c ON c.id=i.client_id JOIN client_contacts cc ON cc.client_id=c.id AND cc.is_primary
 		WHERE c.reminders_enabled AND i.status IN ('open','partial','overdue')
 			AND i.due_on + c.reminder_delay_days <= CURRENT_DATE
-			AND GREATEST(i.amount_minor
-			 - COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='credit_note' AND a.status='approved'),0)
-			 - COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.invoice_id=i.id),0)
-			 + COALESCE((SELECT SUM(a.amount_minor) FROM invoice_adjustments a WHERE a.invoice_id=i.id AND a.kind='payment_reversal' AND a.status='approved'),0),0) > 0
+			AND b.outstanding_minor > 0
 			%s ON CONFLICT (invoice_id,sequence) DO NOTHING`, organizationFilter)
 	db := r.db.WithContext(ctx)
 	var result *gorm.DB
