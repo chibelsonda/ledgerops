@@ -1,12 +1,13 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BriefcaseBusiness, X } from 'lucide-react'
+import { BriefcaseBusiness } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/shared/ui/Button'
 import { Input, Select } from '@/shared/ui/FormControls'
+import { SlideOver } from '@/shared/ui/SlideOver'
 import { projectsApi } from '@/features/projects/api'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { projectFormSchema, toMinor, type ProjectFormValues } from '@/features/projects/schema'
 import type { ClientOption, CreateProjectInput } from '@/features/projects/types'
 
@@ -33,21 +34,13 @@ export function ProjectDialog({ open, clients, onClose, onCreated }: { open: boo
       return projectsApi.create(input)
     },
     onSuccess: async (detail) => {
-      await queryClient.invalidateQueries({ queryKey: ['projects'] })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
       onClose()
       onCreated(detail.project.id)
     },
   })
 
-  return <Dialog className="invoice-dialog" open={open} onClose={onClose}>
-    <DialogBackdrop className="invoice-dialog-backdrop" />
-    <div className="invoice-dialog-positioner">
-      <DialogPanel className="invoice-dialog-panel project-create-panel">
-        <div className="invoice-dialog-heading">
-          <div className="invoice-dialog-title-icon"><BriefcaseBusiness size={18} /></div>
-          <div><span className="eyebrow">Project billing</span><DialogTitle>New project and contract</DialogTitle></div>
-          <Button aria-label="Close project form" className="invoice-dialog-close" variant="ghost" onClick={onClose}><X size={24} /></Button>
-        </div>
+  return <SlideOver open={open} eyebrow="Project billing" title="New project and contract" icon={<BriefcaseBusiness size={18} />} closeLabel="Close project form" panelClassName="project-create-panel" onClose={onClose}>
         <form className="invoice-form" onSubmit={form.handleSubmit((values) => create.mutate(values))} noValidate>
           <h3 className="form-section-title">Project information</h3>
           <div className="invoice-form-grid">
@@ -68,7 +61,5 @@ export function ProjectDialog({ open, clients, onClose, onCreated }: { open: boo
           {create.error ? <p className="form-error">{create.error.message}</p> : null}
           <div className="invoice-dialog-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create and submit'}</Button></div>
         </form>
-      </DialogPanel>
-    </div>
-  </Dialog>
+  </SlideOver>
 }

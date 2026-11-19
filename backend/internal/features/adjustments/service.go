@@ -1,6 +1,10 @@
 package adjustments
 
-import "context"
+import (
+	"context"
+
+	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+)
 
 type Repository interface {
 	List(context.Context, string, string) ([]Adjustment, error)
@@ -8,9 +12,7 @@ type Repository interface {
 	Decide(context.Context, string, string, Actor, DecisionInput) (DecisionResult, error)
 }
 
-type ValidationError struct{ Message string }
-
-func (e ValidationError) Error() string { return e.Message }
+type ValidationError = apperrors.ValidationError
 
 type Service struct{ repository Repository }
 

@@ -1,15 +1,18 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ArrowDownRight, ArrowUpRight, ChartLine, Plus, SlidersHorizontal, TrendingDown, X } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, ChartLine, Plus, SlidersHorizontal, TrendingDown } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { toMinorUnits } from '@/shared/lib/money'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Select } from '@/shared/ui/FormControls'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { ErrorState, LoadingState } from '@/shared/ui/ViewState'
+import { Modal } from '@/shared/ui/Modal'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { forecastApi } from './api'
 import { adjustmentSchema, scenarioSchema, type AdjustmentForm, type ScenarioForm } from './schema'
@@ -21,13 +24,13 @@ export function ForecastPage() {
   const [selectedId, setSelectedId] = useState('')
   const [creating, setCreating] = useState(false)
   const [adjusting, setAdjusting] = useState(false)
-  const scenarios = useQuery({ queryKey: ['cash-flow-scenarios'], queryFn: forecastApi.scenarios })
+  const scenarios = useQuery({ queryKey: queryKeys.forecast.scenarios, queryFn: forecastApi.scenarios })
   useEffect(() => { if (!selectedId && scenarios.data?.[0]) setSelectedId(scenarios.data[0].id) }, [scenarios.data, selectedId])
-  const forecast = useQuery({ queryKey: ['cash-flow-forecast', selectedId], queryFn: () => forecastApi.get(selectedId), enabled: Boolean(selectedId) })
-  const canEdit = session?.user.role === 'admin' || session?.user.role === 'controller'
+  const forecast = useQuery({ queryKey: queryKeys.forecast.detail(selectedId), queryFn: () => forecastApi.get(selectedId), enabled: Boolean(selectedId) })
+  const canEdit = capabilities.operate(session?.user.role)
   const sync = async (value: CashFlowForecast) => {
-    queryClient.setQueryData(['cash-flow-forecast', value.scenario.id], value)
-    await queryClient.invalidateQueries({ queryKey: ['cash-flow-scenarios'] })
+    queryClient.setQueryData(queryKeys.forecast.detail(value.scenario.id), value)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.forecast.scenarios })
   }
   if (scenarios.isLoading) return <LoadingState label="Loading forecast scenarios" />
   if (scenarios.error) return <ErrorState message={scenarios.error.message} />
@@ -63,10 +66,10 @@ function ScenarioDialog({ open, onClose, onCreated }: { open: boolean; onClose: 
 
 function AdjustmentDialog({ open, forecast, onClose, onCreated }: { open: boolean; forecast: CashFlowForecast; onClose: () => void; onCreated: (value: CashFlowForecast) => void }) {
   const form = useForm<AdjustmentForm>({ resolver: zodResolver(adjustmentSchema), defaultValues: { weekStart: forecast.weeks[0].weekStart, direction: 'outflow', label: '', amount: 0 } })
-  const mutation = useMutation({ mutationFn: (value: AdjustmentForm) => forecastApi.addAdjustment(forecast.scenario.id, { weekStart: value.weekStart, direction: value.direction, label: value.label, amountMinor: Math.round(value.amount * 100) }), onSuccess: onCreated })
+  const mutation = useMutation({ mutationFn: (value: AdjustmentForm) => forecastApi.addAdjustment(forecast.scenario.id, { weekStart: value.weekStart, direction: value.direction, label: value.label, amountMinor: toMinorUnits(value.amount) }), onSuccess: onCreated })
   return <ForecastModal open={open} title="Add forecast adjustment" onClose={onClose}><form className="forecast-dialog-form" onSubmit={form.handleSubmit((value) => mutation.mutate(value))}><Select label="Forecast week" error={form.formState.errors.weekStart?.message} {...form.register('weekStart')}>{forecast.weeks.map((week) => <option key={week.weekStart} value={week.weekStart}>{formatDate(week.weekStart)}</option>)}</Select><Select label="Cash direction" error={form.formState.errors.direction?.message} {...form.register('direction')}><option value="inflow">Inflow</option><option value="outflow">Outflow</option></Select><Input label="Description" placeholder="Planned equipment purchase" error={form.formState.errors.label?.message} {...form.register('label')} /><Input label="Amount" type="number" min="0.01" step="0.01" error={form.formState.errors.amount?.message} {...form.register('amount', { valueAsNumber: true })} /><div className="invoice-dialog-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={mutation.isPending}>Add adjustment</Button></div></form></ForecastModal>
 }
 
 function ForecastModal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
-  return <Dialog className="project-nested-dialog" open={open} onClose={onClose}><DialogBackdrop className="project-nested-backdrop" /><div className="project-nested-positioner"><DialogPanel className="project-nested-panel"><div className="close-modal-title"><DialogTitle>{title}</DialogTitle><Button aria-label={`Close ${title}`} variant="ghost" onClick={onClose}><X size={18} /></Button></div>{children}</DialogPanel></div></Dialog>
+  return <Modal open={open} title={title} onClose={onClose}>{children}</Modal>
 }

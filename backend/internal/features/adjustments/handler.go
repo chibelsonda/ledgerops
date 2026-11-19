@@ -2,7 +2,6 @@ package adjustments
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -59,7 +58,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Create(r.Context(), principal.OrganizationID, invoiceID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if writeValidationError(w, "invalid_adjustment", err) {
+		if httpx.WriteValidationError(w, "invalid_adjustment", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create invoice adjustment", err)
@@ -85,20 +84,11 @@ func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Decide(r.Context(), principal.OrganizationID, adjustmentID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if writeValidationError(w, "invalid_decision", err) {
+		if httpx.WriteValidationError(w, "invalid_decision", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "decide invoice adjustment", err)
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, result)
-}
-
-func writeValidationError(w http.ResponseWriter, code string, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, code, validation.Message)
-	return true
 }

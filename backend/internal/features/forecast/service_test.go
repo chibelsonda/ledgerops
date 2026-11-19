@@ -42,8 +42,9 @@ func TestAdjustmentRequiresForecastMonday(t *testing.T) {
 
 func TestValidAdjustmentReachesRepository(t *testing.T) {
 	repository := &repositoryStub{}
-	week := monday(time.Now().UTC()).Format(time.DateOnly)
-	_, err := NewService(repository).AddAdjustment(context.Background(), "org", "scenario", Actor{}, AdjustmentInput{WeekStart: week, Direction: " Inflow ", Label: " Owner funding ", AmountMinor: 100})
+	fixedNow := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
+	week := monday(fixedNow).Format(time.DateOnly)
+	_, err := newServiceWithClock(repository, func() time.Time { return fixedNow }).AddAdjustment(context.Background(), "org", "scenario", Actor{}, AdjustmentInput{WeekStart: week, Direction: " Inflow ", Label: " Owner funding ", AmountMinor: 100})
 	if err != nil || !repository.adjusted {
 		t.Fatalf("expected normalized adjustment to reach repository, got %v", err)
 	}

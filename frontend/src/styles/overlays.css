@@ -1,0 +1,17 @@
+@layer components {
+  .slide-over { @apply relative z-50; }
+  .slide-over-backdrop { @apply fixed inset-0 bg-brand-deep/45 backdrop-blur-[2px] transition-opacity duration-300 ease-out data-closed:opacity-0; }
+  .slide-over-positioner { @apply fixed inset-0 flex justify-end overflow-hidden; }
+  .slide-over-panel { @apply h-full w-full max-w-[760px] overflow-y-auto overscroll-contain border-l border-line bg-paper shadow-[-20px_0_70px_rgba(20,39,31,.22)] transition duration-300 ease-out data-closed:translate-x-full; }
+  .slide-over-heading { @apply sticky top-0 z-10 grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line bg-paper px-6 py-5; }
+  .slide-over-heading h2 { @apply mb-0 mt-1 font-sans text-2xl font-semibold leading-tight tracking-tight; }
+  .slide-over-title-icon { @apply grid size-10 place-items-center rounded-lg bg-emerald-100 text-brand; }
+  .slide-over-close { @apply size-10 !rounded-none !bg-transparent !p-0 text-stone-500 shadow-none hover:!bg-transparent hover:!text-ink; }
+
+  .modal { @apply relative z-[60]; }
+  .modal-backdrop { @apply fixed inset-0 bg-brand-deep/50 backdrop-blur-[2px]; }
+  .modal-positioner { @apply fixed inset-0 grid place-items-center p-4; }
+  .modal-panel { @apply w-full max-w-lg rounded-lg border border-line bg-paper p-6 shadow-[0_24px_80px_rgba(20,39,31,.28)]; }
+  .modal-panel h2 { @apply m-0 font-sans text-xl font-semibold tracking-tight; }
+  .modal-panel > p { @apply mb-5 mt-2 text-xs leading-relaxed text-muted; }
+}

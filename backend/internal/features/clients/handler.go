@@ -2,7 +2,6 @@ package clients
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -59,7 +58,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Create(r.Context(), principal.OrganizationID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if clientValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_client", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create client", err)
@@ -85,7 +84,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.Update(r.Context(), principal.OrganizationID, clientID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if clientValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_client", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "update client", err)
@@ -129,7 +128,7 @@ func (h *Handler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.CreateContact(r.Context(), principal.OrganizationID, clientID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if clientValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_client", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create contact", err)
@@ -155,7 +154,7 @@ func (h *Handler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.UpdateContact(r.Context(), principal.OrganizationID, contactID, Actor{UserID: principal.UserID, Email: principal.Email}, input)
 	if err != nil {
-		if clientValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_client", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "update contact", err)
@@ -184,13 +183,4 @@ func parseListParams(r *http.Request) (ListParams, string) {
 		params.PageSize = value
 	}
 	return params, ""
-}
-
-func clientValidationError(w http.ResponseWriter, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_client", validation.Message)
-	return true
 }

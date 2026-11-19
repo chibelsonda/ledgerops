@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, Download, Eye, Pencil, Plus, Search } from '
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Select } from '@/shared/ui/FormControls'
 import { PageHeader } from '@/shared/ui/PageHeader'
@@ -26,7 +28,7 @@ function exportInvoices(invoices: Invoice[]) {
 
 export function InvoicesPage() {
   const { session } = useAuth()
-  const canEdit = session?.user.role === 'admin' || session?.user.role === 'controller'
+  const canEdit = capabilities.operate(session?.user.role)
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<InvoiceStatus | 'all'>('all')
@@ -44,12 +46,12 @@ export function InvoicesPage() {
 
   const filters = { query, status, page, pageSize }
   const invoicesQuery = useQuery({
-    queryKey: ['invoices', filters],
+    queryKey: queryKeys.invoices.list(filters),
     queryFn: () => invoicesApi.list(filters),
     placeholderData: keepPreviousData,
   })
   const clientsQuery = useQuery({
-    queryKey: ['invoices', 'clients'],
+    queryKey: queryKeys.invoices.clients,
     queryFn: invoicesApi.clients,
     enabled: canEdit,
     staleTime: 5 * 60_000,

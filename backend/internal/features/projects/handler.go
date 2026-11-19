@@ -2,7 +2,6 @@ package projects
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -85,7 +84,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.Create(r.Context(), principal.OrganizationID, projectActor(principal), input)
 	if err != nil {
-		if writeProjectValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_project_billing", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create project", err)
@@ -119,7 +118,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request, pathName, label
 	}
 	detail, err := useCase(r.Context(), principal.OrganizationID, id, projectActor(principal), input)
 	if err != nil {
-		if writeProjectValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_project_billing", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "decide "+label, err)
@@ -143,7 +142,7 @@ func (h *Handler) CreateChangeOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.CreateChangeOrder(r.Context(), principal.OrganizationID, contractID, projectActor(principal), input)
 	if err != nil {
-		if writeProjectValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_project_billing", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create change order", err)
@@ -167,7 +166,7 @@ func (h *Handler) CreateMilestone(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.CreateMilestone(r.Context(), principal.OrganizationID, contractID, projectActor(principal), input)
 	if err != nil {
-		if writeProjectValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_project_billing", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create billing milestone", err)
@@ -191,7 +190,7 @@ func (h *Handler) InvoiceMilestone(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.InvoiceMilestone(r.Context(), principal.OrganizationID, milestoneID, projectActor(principal), input)
 	if err != nil {
-		if writeProjectValidationError(w, err) {
+		if httpx.WriteValidationError(w, "invalid_project_billing", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "invoice billing milestone", err)
@@ -205,15 +204,6 @@ func decodeProjectJSON(w http.ResponseWriter, r *http.Request, destination any) 
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Provide a valid project billing JSON body.")
 		return false
 	}
-	return true
-}
-
-func writeProjectValidationError(w http.ResponseWriter, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_project_billing", validation.Message)
 	return true
 }
 

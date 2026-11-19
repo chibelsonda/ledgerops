@@ -3,13 +3,12 @@ import { AlertCircle, CheckCircle2, CloudCog, Database, ExternalLink, Link2, Lin
 import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatRelativeTime, titleCase } from '@/shared/lib/format'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { ErrorState, LoadingState } from '@/shared/ui/ViewState'
 import { quickBooksApi, syncApi } from './api'
-
-const quickBooksQueryKey = ['integrations', 'quickbooks'] as const
 
 export function SyncPage() {
   const queryClient = useQueryClient()
@@ -18,21 +17,21 @@ export function SyncPage() {
   const callbackMessage = searchParams.get('message')
 
   const runs = useQuery({
-    queryKey: ['sync-runs'],
+    queryKey: queryKeys.syncRuns,
     queryFn: syncApi.list,
     refetchInterval: (query) => query.state.data?.some((run) => run.status === 'queued' || run.status === 'running') ? 1_500 : false,
   })
-  const connection = useQuery({ queryKey: quickBooksQueryKey, queryFn: quickBooksApi.status })
+  const connection = useQuery({ queryKey: queryKeys.quickBooks, queryFn: quickBooksApi.status })
 
   useEffect(() => {
     if (callbackResult === 'connected') {
-      void queryClient.invalidateQueries({ queryKey: quickBooksQueryKey })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.quickBooks })
     }
   }, [callbackResult, queryClient])
 
   const enqueue = useMutation({
     mutationFn: syncApi.enqueue,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sync-runs'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.syncRuns }),
   })
   const connect = useMutation({
     mutationFn: quickBooksApi.connect,
@@ -42,7 +41,7 @@ export function SyncPage() {
     mutationFn: quickBooksApi.disconnect,
     onSuccess: () => {
       setSearchParams({}, { replace: true })
-      void queryClient.invalidateQueries({ queryKey: quickBooksQueryKey })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.quickBooks })
     },
   })
 

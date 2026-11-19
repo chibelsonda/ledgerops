@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -157,10 +158,6 @@ func (r *PostgresRepository) Cancel(ctx context.Context, organizationID, reminde
 		if err := tx.Exec(`UPDATE invoice_reminders SET status='cancelled',cancelled_at=now(),cancelled_by=? WHERE id=?`, actor.UserID, reminderID).Error; err != nil {
 			return fmt.Errorf("cancel reminder: %w", err)
 		}
-		metadata, _ := json.Marshal(map[string]any{"reminderId": reminderID})
-		if err := tx.Exec(`INSERT INTO audit_events (organization_id,actor,action,entity_type,entity_id,metadata) VALUES (?,?,'reminder.cancelled','invoice',?,?::jsonb)`, organizationID, actor.Email, invoiceID, string(metadata)).Error; err != nil {
-			return err
-		}
-		return nil
+		return audit.Write(tx, organizationID, actor.Email, "reminder.cancelled", "invoice", invoiceID, map[string]any{"reminderId": reminderID})
 	})
 }

@@ -18,6 +18,22 @@ export default defineConfig({
       '/healthz': 'http://localhost:8080',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/recharts/') || id.includes('/d3-')) return 'charts'
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router')) return 'react-vendor'
+          if (id.includes('/@tanstack/')) return 'query-vendor'
+          if (id.includes('/@headlessui/')) return 'headless-ui'
+          if (id.includes('/react-hook-form/') || id.includes('/@hookform/') || id.includes('/zod/')) return 'forms-vendor'
+          if (id.includes('/lucide-react/')) return 'icons'
+          return undefined
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',

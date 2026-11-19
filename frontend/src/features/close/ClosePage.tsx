@@ -1,14 +1,16 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarCheck, Check, ClipboardCheck, Clock3, LockKeyhole, Plus, RotateCcw, Send, ShieldCheck, X } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { CalendarCheck, Check, ClipboardCheck, Clock3, LockKeyhole, Plus, RotateCcw, Send, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { formatDate, formatRelativeTime, titleCase } from '@/shared/lib/format'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Textarea } from '@/shared/ui/FormControls'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
+import { Modal } from '@/shared/ui/Modal'
 import { ErrorState, LoadingState } from '@/shared/ui/ViewState'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { closeApi } from './api'
@@ -29,13 +31,13 @@ export function ClosePage() {
   const [creating, setCreating] = useState(false)
   const [task, setTask] = useState<CloseTask>()
   const [reviewing, setReviewing] = useState(false)
-  const periods = useQuery({ queryKey: ['close-periods'], queryFn: closeApi.list })
+  const periods = useQuery({ queryKey: queryKeys.close.all, queryFn: closeApi.list })
   useEffect(() => { if (!selectedId && periods.data?.[0]) setSelectedId(periods.data[0].id) }, [periods.data, selectedId])
-  const detail = useQuery({ queryKey: ['close-periods', selectedId], queryFn: () => closeApi.get(selectedId!), enabled: Boolean(selectedId) })
+  const detail = useQuery({ queryKey: queryKeys.close.detail(selectedId), queryFn: () => closeApi.get(selectedId!), enabled: Boolean(selectedId) })
 
   const syncDetail = async (value: CloseDetail) => {
-    queryClient.setQueryData(['close-periods', value.period.id], value)
-    await queryClient.invalidateQueries({ queryKey: ['close-periods'], exact: true })
+    queryClient.setQueryData(queryKeys.close.detail(value.period.id), value)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.close.all, exact: true })
   }
   const submit = useMutation({ mutationFn: () => closeApi.submit(selectedId!), onSuccess: syncDetail })
   const reopen = useMutation({ mutationFn: (taskId: string) => closeApi.updateTask(taskId, { status: 'pending', evidenceNote: '' }), onSuccess: syncDetail })
@@ -43,9 +45,9 @@ export function ClosePage() {
   if (periods.isLoading) return <LoadingState label="Loading close workspace" />
   if (periods.error) return <ErrorState message={periods.error.message} />
   const current = detail.data
-  const canCreate = session?.user.role === 'controller'
-  const canWork = (session?.user.role === 'admin' || session?.user.role === 'controller') && current?.period.status === 'draft'
-  const canReview = session?.user.role === 'admin' && current?.period.status === 'in_review' && current.period.submittedById !== session.user.userId
+  const canCreate = capabilities.createClosePeriod(session?.user.role)
+  const canWork = capabilities.operate(session?.user.role) && current?.period.status === 'draft'
+  const canReview = capabilities.administer(session?.user.role) && current?.period.status === 'in_review' && current.period.submittedById !== session?.user.userId
 
   return <div className="page">
     <PageHeader eyebrow="Accounting operations" title="Month-end close" description="Run a repeatable close checklist, attach evidence, and require an independent final sign-off before the period is locked." action={canCreate ? <Button onClick={() => setCreating(true)}><Plus size={16} /> New close period</Button> : undefined} />
@@ -110,8 +112,4 @@ function ReviewDialog({ open, periodId, onClose, onDecided }: { open: boolean; p
   const form = useForm<CloseDecisionForm>({ resolver: zodResolver(closeDecisionSchema), defaultValues: { note: '' } })
   const mutation = useMutation({ mutationFn: ({ decision, note }: CloseDecisionForm & { decision: 'approved' | 'rejected' }) => closeApi.decide(periodId, { decision, note }), onSuccess: onDecided })
   return <Modal open={open} title="Independent close review" onClose={onClose}><form className="close-dialog-form"><p>Approval permanently locks this accounting period and its evidence.</p><Textarea label="Review note" rows={4} error={form.formState.errors.note?.message} {...form.register('note')} /><div className="invoice-dialog-actions"><Button type="button" variant="secondary" onClick={form.handleSubmit((value) => mutation.mutate({ ...value, decision: 'rejected' }))}>Return for changes</Button><Button type="button" onClick={form.handleSubmit((value) => mutation.mutate({ ...value, decision: 'approved' }))}>Approve and close</Button></div></form></Modal>
-}
-
-function Modal({ open, title, onClose, children }: { open: boolean; title: string; onClose: () => void; children: ReactNode }) {
-  return <Dialog className="project-nested-dialog" open={open} onClose={onClose}><DialogBackdrop className="project-nested-backdrop" /><div className="project-nested-positioner"><DialogPanel className="project-nested-panel"><div className="close-modal-title"><DialogTitle>{title}</DialogTitle><Button aria-label={`Close ${title}`} variant="ghost" onClick={onClose}><X size={18} /></Button></div>{children}</DialogPanel></div></Dialog>
 }

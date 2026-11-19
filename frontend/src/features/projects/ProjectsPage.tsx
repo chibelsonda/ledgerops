@@ -3,6 +3,8 @@ import { BriefcaseBusiness, Eye, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
@@ -13,11 +15,11 @@ import { ProjectDialog } from './components/ProjectDialog'
 
 export function ProjectsPage() {
   const { session } = useAuth()
-  const canEdit = session?.user.role === 'admin' || session?.user.role === 'controller'
+  const canEdit = capabilities.operate(session?.user.role)
   const [creating, setCreating] = useState(false)
   const [selectedID, setSelectedID] = useState<string>()
-  const projects = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list })
-  const clients = useQuery({ queryKey: ['projects', 'clients'], queryFn: projectsApi.clients, enabled: canEdit })
+  const projects = useQuery({ queryKey: queryKeys.projects.all, queryFn: projectsApi.list })
+  const clients = useQuery({ queryKey: queryKeys.projects.clients, queryFn: projectsApi.clients, enabled: canEdit })
   if (projects.isLoading) return <LoadingState label="Loading projects" />
   if (projects.error) return <ErrorState message={projects.error.message} />
 

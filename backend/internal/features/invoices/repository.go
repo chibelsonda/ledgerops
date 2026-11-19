@@ -2,11 +2,12 @@ package invoices
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
+	"github.com/portfolio/ledgerops/backend/internal/financial"
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -152,16 +153,11 @@ func (r *PostgresRepository) Update(ctx context.Context, organizationID, invoice
 		if err != nil {
 			return err
 		}
-		if input.AmountMinor-credits < paidTotal {
+		status, allowed := financial.ReconcileInvoiceMutation(input.Status, input.AmountMinor, credits, paidTotal)
+		if !allowed {
 			return apperrors.ErrInvalidState
 		}
-		if input.AmountMinor-credits == paidTotal && credits > 0 {
-			input.Status = "paid"
-		} else if paidTotal > 0 {
-			input.Status = "partial"
-		} else if input.Status == "paid" || input.Status == "partial" {
-			return apperrors.ErrInvalidState
-		}
+		input.Status = status
 
 		result := tx.Table("invoices").
 			Where("id = ? AND organization_id = ?", invoiceID, organizationID).
@@ -223,8 +219,8 @@ func (r *PostgresRepository) ListAuditEvents(ctx context.Context, organizationID
 
 	events := make([]AuditEvent, 0, len(rows))
 	for _, row := range rows {
-		metadata := make(map[string]any)
-		if err := json.Unmarshal([]byte(row.Metadata), &metadata); err != nil {
+		metadata, err := audit.DecodeMetadata(row.Metadata)
+		if err != nil {
 			return nil, fmt.Errorf("decode invoice audit metadata: %w", err)
 		}
 		events = append(events, AuditEvent{ID: row.ID, Actor: row.Actor, Action: row.Action, Metadata: metadata, CreatedAt: row.CreatedAt})
@@ -293,8 +289,8 @@ func (r *PostgresRepository) RecordPayment(ctx context.Context, organizationID, 
 			return err
 		}
 		effectiveAmount := invoice.AmountMinor - credits
-		remaining := effectiveAmount - paidTotal
-		if remaining <= 0 || input.AmountMinor > remaining {
+		newStatus, allowed := financial.StatusAfterPayment(effectiveAmount, paidTotal, input.AmountMinor)
+		if !allowed {
 			return apperrors.ErrInvalidState
 		}
 
@@ -312,10 +308,6 @@ func (r *PostgresRepository) RecordPayment(ctx context.Context, organizationID, 
 		}
 		paymentID = row.ID
 
-		newStatus := "partial"
-		if paidTotal+input.AmountMinor == effectiveAmount {
-			newStatus = "paid"
-		}
 		if err := tx.Table("invoices").Where("id = ? AND organization_id = ?", invoiceID, organizationID).Updates(map[string]any{
 			"status":     newStatus,
 			"updated_at": gorm.Expr("now()"),
@@ -422,18 +414,7 @@ func ensureClient(tx *gorm.DB, organizationID, clientID string) error {
 }
 
 func insertAuditEvent(tx *gorm.DB, organizationID, actor, action, entityID string, metadata map[string]any) error {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("encode invoice audit metadata: %w", err)
-	}
-	if err := tx.Exec(`
-		INSERT INTO audit_events (organization_id, actor, action, entity_type, entity_id, metadata)
-		VALUES (?, ?, ?, 'invoice', ?, ?::jsonb)`,
-		organizationID, actor, action, entityID, string(encoded),
-	).Error; err != nil {
-		return fmt.Errorf("write invoice audit event: %w", err)
-	}
-	return nil
+	return audit.Write(tx, organizationID, actor, action, "invoice", entityID, metadata)
 }
 
 func changedFields(before struct {

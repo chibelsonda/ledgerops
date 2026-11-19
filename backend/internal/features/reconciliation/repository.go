@@ -2,10 +2,10 @@ package reconciliation
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -47,18 +47,7 @@ func (r *PostgresRepository) Resolve(ctx context.Context, organizationID, itemID
 			return apperrors.ErrNotFound
 		}
 
-		metadata, err := json.Marshal(map[string]string{"note": note})
-		if err != nil {
-			return fmt.Errorf("encode reconciliation audit metadata: %w", err)
-		}
-		if err := tx.Exec(`
-			INSERT INTO audit_events (organization_id, actor, action, entity_type, entity_id, metadata)
-			VALUES (?, ?, 'reconciliation.resolved', 'reconciliation_item', ?, ?::jsonb)`,
-			organizationID, actor, itemID, string(metadata),
-		).Error; err != nil {
-			return fmt.Errorf("write reconciliation audit event: %w", err)
-		}
-		return nil
+		return audit.Write(tx, organizationID, actor, "reconciliation.resolved", "reconciliation_item", itemID, map[string]any{"note": note})
 	})
 	if err != nil {
 		return fmt.Errorf("commit reconciliation resolution: %w", err)

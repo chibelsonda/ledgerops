@@ -20,7 +20,6 @@ import (
 	"github.com/portfolio/ledgerops/backend/internal/features/reminders"
 	"github.com/portfolio/ledgerops/backend/internal/features/sync"
 	"github.com/portfolio/ledgerops/backend/internal/platform/httpx"
-	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 	"gorm.io/gorm"
 )
 
@@ -98,58 +97,11 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	mux.Handle("GET /api/v1/integrations/quickbooks/callback", sensitiveLimiter.Middleware(http.HandlerFunc(quickBooksHandler.Callback), clientIP.Key))
 	mux.Handle("POST /api/v1/integrations/email/webhook", sensitiveLimiter.Middleware(http.HandlerFunc(remindersHandler.DeliveryWebhook), clientIP.Key))
 
-	allRoles := auth.RequireRoles(logger, identity.RoleAdmin, identity.RoleController, identity.RoleReviewer)
-	operators := auth.RequireRoles(logger, identity.RoleAdmin, identity.RoleController)
-	admins := auth.RequireRoles(logger, identity.RoleAdmin)
-	controllers := auth.RequireRoles(logger, identity.RoleController)
-	protectedMux.Handle("GET /api/v1/dashboard", allRoles(http.HandlerFunc(dashboardHandler.Get)))
-	protectedMux.Handle("GET /api/v1/invoices", allRoles(http.HandlerFunc(invoicesHandler.List)))
-	protectedMux.Handle("GET /api/v1/invoices/clients", allRoles(http.HandlerFunc(invoicesHandler.ListClients)))
-	protectedMux.Handle("POST /api/v1/invoices", operators(http.HandlerFunc(invoicesHandler.Create)))
-	protectedMux.Handle("PATCH /api/v1/invoices/{invoiceID}", operators(http.HandlerFunc(invoicesHandler.Update)))
-	protectedMux.Handle("GET /api/v1/invoices/{invoiceID}/audit-events", allRoles(http.HandlerFunc(invoicesHandler.ListAuditEvents)))
-	protectedMux.Handle("GET /api/v1/invoices/{invoiceID}/payments", allRoles(http.HandlerFunc(invoicesHandler.ListPayments)))
-	protectedMux.Handle("POST /api/v1/invoices/{invoiceID}/payments", operators(http.HandlerFunc(invoicesHandler.RecordPayment)))
-	protectedMux.Handle("GET /api/v1/invoices/{invoiceID}/adjustments", allRoles(http.HandlerFunc(adjustmentsHandler.List)))
-	protectedMux.Handle("POST /api/v1/invoices/{invoiceID}/adjustments", operators(http.HandlerFunc(adjustmentsHandler.Create)))
-	protectedMux.Handle("PATCH /api/v1/adjustments/{adjustmentID}", admins(http.HandlerFunc(adjustmentsHandler.Decide)))
-	protectedMux.Handle("GET /api/v1/clients", allRoles(http.HandlerFunc(clientsHandler.List)))
-	protectedMux.Handle("POST /api/v1/clients", operators(http.HandlerFunc(clientsHandler.Create)))
-	protectedMux.Handle("PATCH /api/v1/clients/{clientID}", operators(http.HandlerFunc(clientsHandler.Update)))
-	protectedMux.Handle("GET /api/v1/clients/{clientID}/contacts", allRoles(http.HandlerFunc(clientsHandler.ListContacts)))
-	protectedMux.Handle("POST /api/v1/clients/{clientID}/contacts", operators(http.HandlerFunc(clientsHandler.CreateContact)))
-	protectedMux.Handle("PATCH /api/v1/contacts/{contactID}", operators(http.HandlerFunc(clientsHandler.UpdateContact)))
-	protectedMux.Handle("GET /api/v1/projects", allRoles(http.HandlerFunc(projectsHandler.List)))
-	protectedMux.Handle("GET /api/v1/projects/clients", allRoles(http.HandlerFunc(projectsHandler.ListClients)))
-	protectedMux.Handle("GET /api/v1/projects/{projectID}", allRoles(http.HandlerFunc(projectsHandler.Get)))
-	protectedMux.Handle("POST /api/v1/projects", operators(http.HandlerFunc(projectsHandler.Create)))
-	protectedMux.Handle("PATCH /api/v1/contracts/{contractID}/decision", admins(http.HandlerFunc(projectsHandler.DecideContract)))
-	protectedMux.Handle("POST /api/v1/contracts/{contractID}/change-orders", operators(http.HandlerFunc(projectsHandler.CreateChangeOrder)))
-	protectedMux.Handle("PATCH /api/v1/change-orders/{changeOrderID}/decision", admins(http.HandlerFunc(projectsHandler.DecideChangeOrder)))
-	protectedMux.Handle("POST /api/v1/contracts/{contractID}/milestones", operators(http.HandlerFunc(projectsHandler.CreateMilestone)))
-	protectedMux.Handle("POST /api/v1/milestones/{milestoneID}/invoice", operators(http.HandlerFunc(projectsHandler.InvoiceMilestone)))
-	protectedMux.Handle("GET /api/v1/close-periods", allRoles(http.HandlerFunc(closeHandler.List)))
-	protectedMux.Handle("GET /api/v1/close-periods/{periodID}", allRoles(http.HandlerFunc(closeHandler.Get)))
-	protectedMux.Handle("POST /api/v1/close-periods", controllers(http.HandlerFunc(closeHandler.Create)))
-	protectedMux.Handle("PATCH /api/v1/close-tasks/{taskID}", operators(http.HandlerFunc(closeHandler.UpdateTask)))
-	protectedMux.Handle("POST /api/v1/close-periods/{periodID}/submit", operators(http.HandlerFunc(closeHandler.Submit)))
-	protectedMux.Handle("PATCH /api/v1/close-periods/{periodID}/decision", admins(http.HandlerFunc(closeHandler.Decide)))
-	protectedMux.Handle("GET /api/v1/cash-flow/scenarios", allRoles(http.HandlerFunc(forecastHandler.ListScenarios)))
-	protectedMux.Handle("GET /api/v1/cash-flow/scenarios/{scenarioID}", allRoles(http.HandlerFunc(forecastHandler.Get)))
-	protectedMux.Handle("POST /api/v1/cash-flow/scenarios", operators(http.HandlerFunc(forecastHandler.CreateScenario)))
-	protectedMux.Handle("POST /api/v1/cash-flow/scenarios/{scenarioID}/adjustments", operators(http.HandlerFunc(forecastHandler.AddAdjustment)))
-	protectedMux.Handle("GET /api/v1/reminders", allRoles(http.HandlerFunc(remindersHandler.List)))
-	protectedMux.Handle("GET /api/v1/reminders/delivery-status", allRoles(http.HandlerFunc(remindersHandler.DeliveryStatus)))
-	protectedMux.Handle("POST /api/v1/reminders/generate", operators(http.HandlerFunc(remindersHandler.Generate)))
-	protectedMux.Handle("PATCH /api/v1/reminders/{reminderID}/cancel", operators(http.HandlerFunc(remindersHandler.Cancel)))
-	protectedMux.Handle("GET /api/v1/reconciliation", allRoles(http.HandlerFunc(reconciliationHandler.List)))
-	protectedMux.Handle("PATCH /api/v1/reconciliation/{itemID}", allRoles(http.HandlerFunc(reconciliationHandler.Resolve)))
-	protectedMux.Handle("GET /api/v1/sync-runs", operators(http.HandlerFunc(syncHandler.List)))
-	protectedMux.Handle("POST /api/v1/sync-runs", operators(http.HandlerFunc(syncHandler.Enqueue)))
-	protectedMux.Handle("GET /api/v1/integrations/quickbooks", operators(http.HandlerFunc(quickBooksHandler.Status)))
-	protectedMux.Handle("POST /api/v1/integrations/quickbooks/connect", admins(http.HandlerFunc(quickBooksHandler.Connect)))
-	protectedMux.Handle("DELETE /api/v1/integrations/quickbooks", admins(http.HandlerFunc(quickBooksHandler.Disconnect)))
-	protectedMux.HandleFunc("POST /api/v1/auth/logout", authHandler.Logout)
+	registerProtectedRoutes(protectedMux, logger, routeHandlers{
+		auth: authHandler, dashboard: dashboardHandler, invoices: invoicesHandler, adjustments: adjustmentsHandler,
+		clients: clientsHandler, projects: projectsHandler, close: closeHandler, forecast: forecastHandler,
+		reminders: remindersHandler, reconciliation: reconciliationHandler, sync: syncHandler, quickBooks: quickBooksHandler,
+	})
 	mux.Handle("/api/v1/", authMiddleware.Authenticate(userLimiter.Middleware(protectedMux, httpx.PrincipalRateLimitKey)))
 
 	return httpx.Wrap(globalLimiter.Middleware(mux, clientIP.Key), logger, cfg.AllowedOrigin), nil

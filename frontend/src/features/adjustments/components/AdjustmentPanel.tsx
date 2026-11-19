@@ -7,6 +7,9 @@ import { useAuth } from '@/features/auth/AuthProvider'
 import { invoicesApi } from '@/features/invoices/api'
 import type { Invoice } from '@/features/invoices/types'
 import { formatMoney, formatRelativeTime, titleCase } from '@/shared/lib/format'
+import { toMinorUnits } from '@/shared/lib/money'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Select, Textarea } from '@/shared/ui/FormControls'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
@@ -30,23 +33,23 @@ export function AdjustmentPanel({ invoice, onInvoiceChanged }: AdjustmentPanelPr
   const createForm = useForm<AdjustmentFormValues>({ resolver: zodResolver(schema), mode: 'onChange', defaultValues: createDefaults })
   const decisionForm = useForm<AdjustmentDecisionValues>({ resolver: zodResolver(adjustmentDecisionSchema), mode: 'onChange', defaultValues: { note: '' } })
   const kind = createForm.watch('kind')
-  const adjustmentsQuery = useQuery({ queryKey: ['invoices', invoice.id, 'adjustments'], queryFn: () => adjustmentsApi.list(invoice.id) })
-  const paymentsQuery = useQuery({ queryKey: ['invoices', invoice.id, 'payments'], queryFn: () => invoicesApi.payments(invoice.id) })
+  const adjustmentsQuery = useQuery({ queryKey: queryKeys.invoices.adjustments(invoice.id), queryFn: () => adjustmentsApi.list(invoice.id) })
+  const paymentsQuery = useQuery({ queryKey: queryKeys.invoices.payments(invoice.id), queryFn: () => invoicesApi.payments(invoice.id) })
   const blockedPaymentIds = new Set(adjustmentsQuery.data?.filter((item) => item.kind === 'payment_reversal' && item.status !== 'rejected').map((item) => item.paymentId))
   const reversiblePayments = paymentsQuery.data?.filter((payment) => !payment.reversed && !blockedPaymentIds.has(payment.id)) ?? []
 
   const refresh = async () => Promise.all([
-    queryClient.invalidateQueries({ queryKey: ['invoices'] }),
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-    queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id, 'adjustments'] }),
-    queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id, 'payments'] }),
-    queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id, 'audit-events'] }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.adjustments(invoice.id) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.payments(invoice.id) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.invoices.audit(invoice.id) }),
   ])
 
   const createAdjustment = useMutation({
     mutationFn: (values: AdjustmentFormValues) => {
       const input: CreateAdjustmentInput = values.kind === 'credit_note'
-        ? { kind: values.kind, amountMinor: Math.round(values.amount * 100), reason: values.reason.trim() }
+        ? { kind: values.kind, amountMinor: toMinorUnits(values.amount), reason: values.reason.trim() }
         : { kind: values.kind, paymentId: values.paymentId, reason: values.reason.trim() }
       return adjustmentsApi.create(invoice.id, input)
     },
@@ -88,7 +91,7 @@ export function AdjustmentPanel({ invoice, onInvoiceChanged }: AdjustmentPanelPr
       {adjustmentsQuery.error ? <p className="form-error">{adjustmentsQuery.error.message}</p> : null}
       {adjustmentsQuery.data?.length === 0 ? <p className="payment-empty">No adjustment requests.</p> : null}
       {adjustmentsQuery.data?.map((adjustment) => {
-        const canReview = session?.user.role === 'admin' && adjustment.status === 'pending' && adjustment.requestedById !== session.user.userId
+        const canReview = capabilities.administer(session?.user.role) && adjustment.status === 'pending' && adjustment.requestedById !== session?.user.userId
         return (
           <article className="adjustment-row" key={adjustment.id}>
             <div className="adjustment-row-summary">
@@ -104,7 +107,7 @@ export function AdjustmentPanel({ invoice, onInvoiceChanged }: AdjustmentPanelPr
                 <Button type="button" onClick={() => openDecision(adjustment, 'approved')}>Approve</Button>
               </div>
             ) : null}
-            {session?.user.role === 'admin' && adjustment.status === 'pending' && adjustment.requestedById === session.user.userId ? <small className="separation-note">Another admin must review your request.</small> : null}
+            {capabilities.administer(session?.user.role) && adjustment.status === 'pending' && adjustment.requestedById === session?.user.userId ? <small className="separation-note">Another admin must review your request.</small> : null}
           </article>
         )
       })}

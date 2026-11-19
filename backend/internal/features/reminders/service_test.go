@@ -22,10 +22,11 @@ func (s *serviceRepositoryStub) RecordDeliveryEvent(_ context.Context, input Del
 
 func TestRecordDeliveryEventNormalizesAndPersists(t *testing.T) {
 	repository := &serviceRepositoryStub{}
-	service := NewService(repository)
+	now := time.Date(2026, time.November, 19, 12, 0, 0, 0, time.UTC)
+	service := newServiceWithClock(repository, func() time.Time { return now })
 	input := DeliveryEventInput{
 		EventID: " provider-event-1 ", ProviderMessageID: " <message@ledgerops.local> ",
-		EventType: " DELIVERED ", OccurredAt: time.Now().Add(-time.Minute).UTC().Format(time.RFC3339),
+		EventType: " DELIVERED ", OccurredAt: now.Add(-time.Minute).Format(time.RFC3339),
 	}
 	if err := service.RecordDeliveryEvent(context.Background(), input); err != nil {
 		t.Fatalf("RecordDeliveryEvent() error = %v", err)

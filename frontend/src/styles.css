@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/overlays.css";
 
 @theme {
   --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
@@ -147,16 +148,8 @@
   .header-actions { @apply flex items-center gap-2; }
   .table-subtext { @apply mt-1.5 flex items-center gap-1 text-[10px] font-medium leading-relaxed text-muted; }
 
-  .invoice-dialog { @apply relative z-50; }
-  .invoice-dialog-backdrop { @apply fixed inset-0 bg-brand-deep/45 backdrop-blur-[2px] transition-opacity duration-300 ease-out data-closed:opacity-0; }
-  .invoice-dialog-positioner { @apply fixed inset-0 flex justify-end overflow-hidden; }
-  .invoice-dialog-panel { @apply h-full w-full max-w-[760px] overflow-y-auto overscroll-contain border-l border-line bg-paper shadow-[-20px_0_70px_rgba(20,39,31,.22)] transition duration-300 ease-out data-closed:translate-x-full; }
-  .invoice-dialog-heading { @apply sticky top-0 z-10 grid grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line bg-paper px-6 py-5; }
-  .invoice-dialog-heading h2 { @apply mb-0 mt-1 font-sans text-2xl font-semibold leading-tight tracking-tight; }
-  .invoice-dialog-title-icon { @apply grid size-10 place-items-center rounded-lg bg-emerald-100 text-brand; }
-  .invoice-dialog-close { @apply size-10 !rounded-none !bg-transparent !p-0 text-stone-500 shadow-none hover:!bg-transparent hover:!text-ink; }
   .invoice-tabbed-panel { @apply flex flex-col overflow-hidden; }
-  .invoice-tabbed-panel > .invoice-dialog-heading { @apply static shrink-0; }
+  .invoice-tabbed-panel > .slide-over-heading { @apply static shrink-0; }
   .invoice-tabs { @apply flex min-h-0 flex-1 flex-col; }
   .invoice-tab-list { @apply flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-stone-50/70 px-6 pt-2; }
   .invoice-tab { @apply whitespace-nowrap rounded-t-xl rounded-b-none border-b-2 border-transparent bg-transparent px-3 py-2.5 text-xs font-semibold text-muted outline-none transition hover:bg-white hover:text-ink data-selected:border-brand data-selected:bg-paper data-selected:text-brand focus-visible:ring-2 focus-visible:ring-emerald-700/20; }
@@ -270,12 +263,6 @@
   .project-audit-row { @apply grid grid-cols-[auto_1fr_auto] items-center gap-3 border-t border-stone-200 py-3 text-xs; }
   .project-audit-action { @apply text-[10px] font-bold uppercase tracking-wide text-brand; }
   .project-audit-row span:last-child { @apply text-[10px] text-muted; }
-  .project-nested-dialog { @apply relative z-[60]; }
-  .project-nested-backdrop { @apply fixed inset-0 bg-brand-deep/50 backdrop-blur-[2px]; }
-  .project-nested-positioner { @apply fixed inset-0 grid place-items-center p-4; }
-  .project-nested-panel { @apply w-full max-w-lg rounded-lg border border-line bg-paper p-6 shadow-[0_24px_80px_rgba(20,39,31,.28)]; }
-  .project-nested-panel h2 { @apply m-0 font-sans text-xl font-semibold tracking-tight; }
-  .project-nested-panel > p { @apply mb-5 mt-2 text-xs leading-relaxed text-muted; }
   .project-invoice-grid { @apply grid grid-cols-2 gap-4; }
   .project-invoice-grid > :first-child { @apply col-span-full; }
 
@@ -466,8 +453,8 @@
   .invoice-search { @apply min-w-full; }
   .table-pagination { @apply flex-wrap justify-start; }
   .page-size { @apply w-full; }
-  .invoice-dialog-panel { @apply max-w-full; }
-  .invoice-dialog-heading, .invoice-form, .payment-panel, .adjustment-panel, .invoice-audit { @apply px-4; }
+  .slide-over-panel { @apply max-w-full; }
+  .slide-over-heading, .invoice-form, .payment-panel, .adjustment-panel, .invoice-audit { @apply px-4; }
   .invoice-form-grid { @apply grid-cols-1; }
   .client-form-grid { @apply grid-cols-1; }
   .contact-panel { @apply px-4; }

@@ -5,12 +5,13 @@ import { formatMoney } from '@/shared/lib/format'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { ErrorState, LoadingState } from '@/shared/ui/ViewState'
 import { dashboardApi } from './api'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { MetricCard } from './components/MetricCard'
 
 const chartMoney = (value: number) => formatMoney(value, 'USD', true)
 
 export function OverviewPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['dashboard'], queryFn: dashboardApi.get })
+  const { data, isLoading, error } = useQuery({ queryKey: queryKeys.dashboard, queryFn: dashboardApi.get })
 
   if (isLoading) return <LoadingState />
   if (error || !data) return <ErrorState message={error?.message ?? 'No dashboard data was returned.'} />

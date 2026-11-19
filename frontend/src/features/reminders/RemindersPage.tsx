@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, MailCheck, RefreshCw } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { PageHeader } from '@/shared/ui/PageHeader'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
@@ -28,16 +30,16 @@ function deliveryMessage(status?: DeliveryStatus) {
 export function RemindersPage() {
   const { session } = useAuth()
   const queryClient = useQueryClient()
-  const canEdit = session?.user.role !== 'reviewer'
-  const reminders = useQuery({ queryKey: ['reminders'], queryFn: remindersApi.list })
-  const deliveryStatus = useQuery({ queryKey: ['reminders', 'delivery-status'], queryFn: remindersApi.deliveryStatus })
+  const canEdit = capabilities.operate(session?.user.role)
+  const reminders = useQuery({ queryKey: queryKeys.reminders.all, queryFn: remindersApi.list })
+  const deliveryStatus = useQuery({ queryKey: queryKeys.reminders.deliveryStatus, queryFn: remindersApi.deliveryStatus })
   const generate = useMutation({
     mutationFn: remindersApi.generate,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reminders'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.reminders.all }),
   })
   const cancel = useMutation({
     mutationFn: remindersApi.cancel,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reminders'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.reminders.all }),
   })
 
   if (reminders.isLoading || deliveryStatus.isLoading) return <LoadingState label="Loading reminders" />

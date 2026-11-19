@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoadingState } from '@/shared/ui/ViewState'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { useAuth } from '@/features/auth/AuthProvider'
+import { capabilities } from '@/shared/lib/capabilities'
 import { AppShell } from './AppShell'
 
 const OverviewPage = lazy(() => import('@/features/dashboard/OverviewPage').then((module) => ({ default: module.OverviewPage })))
@@ -19,7 +20,7 @@ export default function App() {
   const { session, isLoading } = useAuth()
   if (isLoading) return <LoadingState label="Restoring your secure session" />
   if (!session) return <LoginPage />
-  const canOperateSync = session.user.role === 'admin' || session.user.role === 'controller'
+  const canOperateSync = capabilities.operate(session.user.role)
 
   return (
     <Suspense fallback={<LoadingState />}>

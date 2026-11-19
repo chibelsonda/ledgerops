@@ -14,7 +14,9 @@ import (
 func TestDecodeJSONRejectsTrailingJSONValue(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/things", bytes.NewBufferString(`{"name":"first"}{"name":"second"}`))
 	response := httptest.NewRecorder()
-	var input struct{ Name string `json:"name"` }
+	var input struct {
+		Name string `json:"name"`
+	}
 
 	if err := DecodeJSON(response, request, &input, 1024); err == nil {
 		t.Fatal("DecodeJSON accepted multiple JSON values")
@@ -24,7 +26,9 @@ func TestDecodeJSONRejectsTrailingJSONValue(t *testing.T) {
 func TestDecodeJSONAcceptsOneValueAndWhitespace(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/things", bytes.NewBufferString("{\"name\":\"only\"} \n\t"))
 	response := httptest.NewRecorder()
-	var input struct{ Name string `json:"name"` }
+	var input struct {
+		Name string `json:"name"`
+	}
 
 	if err := DecodeJSON(response, request, &input, 1024); err != nil {
 		t.Fatalf("DecodeJSON() error = %v", err)

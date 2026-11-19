@@ -1,12 +1,15 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Clock3, Eye, FilePlus2, Pencil, X } from 'lucide-react'
+import { Clock3, Eye, FilePlus2, Pencil } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { formatDate, formatMoney, formatRelativeTime, titleCase } from '@/shared/lib/format'
+import { toMinorUnits } from '@/shared/lib/money'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Select, Textarea } from '@/shared/ui/FormControls'
+import { SlideOver } from '@/shared/ui/SlideOver'
 import { AdjustmentPanel } from '@/features/adjustments/components/AdjustmentPanel'
 import { invoicesApi } from '@/features/invoices/api'
 import { localDate } from '@/features/invoices/formUtils'
@@ -41,7 +44,7 @@ function mutationInput(values: InvoiceFormValues, includeAuditNote: boolean): In
     invoiceNumber: values.invoiceNumber.trim(),
     status: values.status,
     currencyCode: values.currencyCode.trim().toUpperCase(),
-    amountMinor: Math.round(values.amount * 100),
+    amountMinor: toMinorUnits(values.amount),
     issuedOn: values.issuedOn,
     dueOn: values.dueOn,
     ...(includeAuditNote ? { auditNote: values.auditNote.trim() } : {}),
@@ -64,7 +67,7 @@ export function InvoiceDialog({ open, invoice, clients, onClose, onPaymentRecord
   }, [invoice, open, reset])
 
   const auditQuery = useQuery({
-    queryKey: ['invoices', invoice?.id, 'audit-events'],
+    queryKey: queryKeys.invoices.audit(invoice?.id),
     queryFn: () => invoicesApi.auditEvents(invoice!.id),
     enabled: open && isEditing,
   })
@@ -75,9 +78,9 @@ export function InvoiceDialog({ open, invoice, clients, onClose, onPaymentRecord
     },
     onSuccess: async (savedInvoice) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['invoices'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-        queryClient.invalidateQueries({ queryKey: ['invoices', savedInvoice.id, 'audit-events'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.audit(savedInvoice.id) }),
       ])
       onClose()
     },
@@ -88,18 +91,15 @@ export function InvoiceDialog({ open, invoice, clients, onClose, onPaymentRecord
   }
 
   return (
-    <Dialog className="invoice-dialog" open={open} onClose={close}>
-      <DialogBackdrop transition className="invoice-dialog-backdrop" />
-      <div className="invoice-dialog-positioner">
-        <DialogPanel transition className="invoice-dialog-panel invoice-tabbed-panel">
-          <div className="invoice-dialog-heading">
-            <div className="invoice-dialog-title-icon">{isProjectBilling ? <Eye size={17} /> : isEditing ? <Pencil size={17} /> : <FilePlus2 size={18} />}</div>
-            <div>
-              <span className="eyebrow">{isProjectBilling ? 'Project billing' : isEditing ? 'Controlled change' : 'Accounts receivable'}</span>
-              <DialogTitle>{isEditing ? `${isProjectBilling ? 'View' : 'Edit'} ${invoice.invoiceNumber}` : 'Create invoice'}</DialogTitle>
-            </div>
-            <Button aria-label="Close invoice form" className="invoice-dialog-close" variant="ghost" type="button" onClick={close}><X size={24} /></Button>
-          </div>
+    <SlideOver
+      open={open}
+      onClose={close}
+      eyebrow={isProjectBilling ? 'Project billing' : isEditing ? 'Controlled change' : 'Accounts receivable'}
+      title={isEditing ? `${isProjectBilling ? 'View' : 'Edit'} ${invoice.invoiceNumber}` : 'Create invoice'}
+      icon={isProjectBilling ? <Eye size={17} /> : isEditing ? <Pencil size={17} /> : <FilePlus2 size={18} />}
+      closeLabel="Close invoice form"
+      panelClassName="invoice-tabbed-panel"
+    >
 
           <TabGroup className="invoice-tabs">
             <TabList className="invoice-tab-list">
@@ -182,8 +182,6 @@ export function InvoiceDialog({ open, invoice, clients, onClose, onPaymentRecord
               ) : null}
             </TabPanels>
           </TabGroup>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    </SlideOver>
   )
 }

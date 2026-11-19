@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronRight, ShieldCheck } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { formatMoney, titleCase } from '@/shared/lib/format'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Textarea } from '@/shared/ui/FormControls'
 import { PageHeader } from '@/shared/ui/PageHeader'
@@ -21,15 +22,15 @@ export function ReviewPage() {
     mode: 'onChange',
     defaultValues: { note: '' },
   })
-  const { data = [], isLoading, error } = useQuery({ queryKey: ['reconciliation'], queryFn: reconciliationApi.list })
+  const { data = [], isLoading, error } = useQuery({ queryKey: queryKeys.reconciliation, queryFn: reconciliationApi.list })
   const resolveItem = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) => reconciliationApi.resolve(id, note),
     onSuccess: async () => {
       setSelected(null)
       reset()
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['reconciliation'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.reconciliation }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
       ])
     },
   })

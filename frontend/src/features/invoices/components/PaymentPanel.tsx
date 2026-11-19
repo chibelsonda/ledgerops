@@ -4,6 +4,8 @@ import { Banknote, LockKeyhole } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { formatDate, formatMoney } from '@/shared/lib/format'
+import { toMinorUnits } from '@/shared/lib/money'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { Button } from '@/shared/ui/Button'
 import { Input, Textarea } from '@/shared/ui/FormControls'
 import { invoicesApi } from '@/features/invoices/api'
@@ -30,13 +32,13 @@ export function PaymentPanel({ invoice, onRecorded }: PaymentPanelProps) {
     defaultValues: defaultValues(),
   })
   const paymentsQuery = useQuery({
-    queryKey: ['invoices', invoice.id, 'payments'],
+    queryKey: queryKeys.invoices.payments(invoice.id),
     queryFn: () => invoicesApi.payments(invoice.id),
   })
   const recordPayment = useMutation({
     mutationFn: (values: PaymentFormValues) => {
       const input: PaymentInput = {
-        amountMinor: Math.round(values.amount * 100),
+        amountMinor: toMinorUnits(values.amount),
         receivedOn: values.receivedOn,
         reference: values.reference.trim(),
         auditNote: values.auditNote.trim(),
@@ -47,10 +49,10 @@ export function PaymentPanel({ invoice, onRecorded }: PaymentPanelProps) {
       reset(defaultValues())
       onRecorded(result.invoice)
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['invoices'] }),
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-        queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id, 'payments'] }),
-        queryClient.invalidateQueries({ queryKey: ['invoices', invoice.id, 'audit-events'] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.payments(invoice.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.audit(invoice.id) }),
       ])
     },
   })

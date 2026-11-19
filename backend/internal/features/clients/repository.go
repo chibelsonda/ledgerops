@@ -2,11 +2,11 @@ package clients
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -187,9 +187,5 @@ func (r *PostgresRepository) getContact(ctx context.Context, organizationID, con
 }
 
 func clientAudit(tx *gorm.DB, organizationID, actor, action, clientID string, metadata map[string]any) error {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return err
-	}
-	return tx.Exec(`INSERT INTO audit_events (organization_id,actor,action,entity_type,entity_id,metadata) VALUES (?,?,?,'client',?,?::jsonb)`, organizationID, actor, action, clientID, string(encoded)).Error
+	return audit.Write(tx, organizationID, actor, action, "client", clientID, metadata)
 }

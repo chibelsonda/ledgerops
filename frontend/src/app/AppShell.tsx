@@ -7,23 +7,33 @@ import { dashboardApi } from '@/features/dashboard/api'
 import { useAuth } from '@/features/auth/AuthProvider'
 import type { Role } from '@/features/auth/types'
 import { titleCase } from '@/shared/lib/format'
+import { capabilities } from '@/shared/lib/capabilities'
+import { queryKeys } from '@/shared/api/queryKeys'
 import { LedgerOpsMark } from '@/shared/ui/LedgerOpsMark'
 
-const navigation = [
-  { to: '/', label: 'Overview', icon: ChartNoAxesCombined, end: true, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/invoices', label: 'Invoices', icon: FileText, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/clients', label: 'Clients', icon: Users, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/projects', label: 'Projects', icon: BriefcaseBusiness, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/close', label: 'Month-end close', icon: CalendarCheck, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/forecast', label: 'Cash forecast', icon: ChartLine, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/collections', label: 'Collections', icon: MailCheck, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/review', label: 'Review', icon: ScanSearch, roles: ['admin', 'controller', 'reviewer'] as Role[] },
-  { to: '/sync', label: 'Data sync', icon: RefreshCw, roles: ['admin', 'controller'] as Role[] },
+interface NavigationItem {
+  to: string
+  label: string
+  icon: typeof ChartNoAxesCombined
+  end?: boolean
+  allowed?: (role?: Role) => boolean
+}
+
+const navigation: NavigationItem[] = [
+  { to: '/', label: 'Overview', icon: ChartNoAxesCombined, end: true },
+  { to: '/invoices', label: 'Invoices', icon: FileText },
+  { to: '/clients', label: 'Clients', icon: Users },
+  { to: '/projects', label: 'Projects', icon: BriefcaseBusiness },
+  { to: '/close', label: 'Month-end close', icon: CalendarCheck },
+  { to: '/forecast', label: 'Cash forecast', icon: ChartLine },
+  { to: '/collections', label: 'Collections', icon: MailCheck },
+  { to: '/review', label: 'Review', icon: ScanSearch },
+  { to: '/sync', label: 'Data sync', icon: RefreshCw, allowed: capabilities.operate },
 ]
 
 export function AppShell() {
   const { session, logout } = useAuth()
-  const { data } = useQuery({ queryKey: ['dashboard'], queryFn: dashboardApi.get })
+  const { data } = useQuery({ queryKey: queryKeys.dashboard, queryFn: dashboardApi.get })
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   if (!session) return null
@@ -34,7 +44,7 @@ export function AppShell() {
   )
   const navigationLinks = (onNavigate?: () => void) => (
     <nav aria-label="Primary navigation">
-      {navigation.filter((item) => item.roles.includes(session.user.role)).map(({ to, label, icon: Icon, end }) => (
+      {navigation.filter((item) => !item.allowed || item.allowed(session.user.role)).map(({ to, label, icon: Icon, end }) => (
         <NavLink key={to} to={to} end={end} onClick={onNavigate} aria-label={label} title={sidebarCollapsed ? label : undefined} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
           <Icon size={18} strokeWidth={1.8} /><span className="nav-label">{label}</span>
           {label === 'Review' && data?.metrics.openReviewCount ? <span className="nav-count">{data.metrics.openReviewCount}</span> : null}

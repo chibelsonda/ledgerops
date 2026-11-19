@@ -2,7 +2,6 @@ package invoices
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -72,7 +71,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	invoice, err := h.service.Create(r.Context(), organizationID, actor, input)
 	if err != nil {
-		if writeValidationError(w, "invalid_invoice", err) {
+		if httpx.WriteValidationError(w, "invalid_invoice", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create invoice", err)
@@ -97,7 +96,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	invoice, err := h.service.Update(r.Context(), organizationID, invoiceID, actor, input)
 	if err != nil {
-		if writeValidationError(w, "invalid_invoice", err) {
+		if httpx.WriteValidationError(w, "invalid_invoice", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "update invoice", err)
@@ -162,7 +161,7 @@ func (h *Handler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		Email:  principal.Email,
 	}, input)
 	if err != nil {
-		if writeValidationError(w, "invalid_payment", err) {
+		if httpx.WriteValidationError(w, "invalid_payment", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "record invoice payment", err)
@@ -211,15 +210,6 @@ func decodeMutation(w http.ResponseWriter, r *http.Request) (MutationInput, bool
 		return MutationInput{}, false
 	}
 	return input, true
-}
-
-func writeValidationError(w http.ResponseWriter, code string, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, code, validation.Message)
-	return true
 }
 
 func requestIdentity(w http.ResponseWriter, r *http.Request) (string, string, bool) {

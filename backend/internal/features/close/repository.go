@@ -2,11 +2,11 @@ package close
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -190,8 +190,8 @@ func (r *PostgresRepository) listAudit(ctx context.Context, organizationID, peri
 	}
 	events := make([]AuditEvent, 0, len(rows))
 	for _, item := range rows {
-		metadata := make(map[string]any)
-		if err := json.Unmarshal([]byte(item.Metadata), &metadata); err != nil {
+		metadata, err := audit.DecodeMetadata(item.Metadata)
+		if err != nil {
 			return nil, fmt.Errorf("decode close audit metadata: %w", err)
 		}
 		events = append(events, AuditEvent{ID: item.ID, Actor: item.Actor, Action: item.Action, Metadata: metadata, CreatedAt: item.CreatedAt})
@@ -200,12 +200,5 @@ func (r *PostgresRepository) listAudit(ctx context.Context, organizationID, peri
 }
 
 func writeAudit(tx *gorm.DB, organizationID, actor, action, periodID string, metadata map[string]any) error {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("encode close audit metadata: %w", err)
-	}
-	if err := tx.Exec(`INSERT INTO audit_events (organization_id,actor,action,entity_type,entity_id,metadata) VALUES (?,?,?,?,?,?::jsonb)`, organizationID, actor, action, "close_period", periodID, string(encoded)).Error; err != nil {
-		return fmt.Errorf("write close audit event: %w", err)
-	}
-	return nil
+	return audit.Write(tx, organizationID, actor, action, "close_period", periodID, metadata)
 }

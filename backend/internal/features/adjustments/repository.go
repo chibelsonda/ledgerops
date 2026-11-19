@@ -2,18 +2,24 @@ package adjustments
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/portfolio/ledgerops/backend/internal/financial"
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
-type PostgresRepository struct{ db *gorm.DB }
+type PostgresRepository struct {
+	db  *gorm.DB
+	now func() time.Time
+}
 
-func NewPostgresRepository(db *gorm.DB) *PostgresRepository { return &PostgresRepository{db: db} }
+func NewPostgresRepository(db *gorm.DB) *PostgresRepository {
+	return &PostgresRepository{db: db, now: time.Now}
+}
 
 func (r *PostgresRepository) List(ctx context.Context, organizationID, invoiceID string) ([]Adjustment, error) {
 	var exists bool
@@ -162,7 +168,7 @@ func (r *PostgresRepository) Decide(ctx context.Context, organizationID, adjustm
 			return fmt.Errorf("finalize invoice adjustment: %w", err)
 		}
 		if input.Decision == "approved" {
-			if err := deriveInvoiceStatus(tx, invoice); err != nil {
+			if err := deriveInvoiceStatus(tx, invoice, r.now()); err != nil {
 				return err
 			}
 		}
@@ -216,20 +222,16 @@ func loadTotals(tx *gorm.DB, invoiceID string) (totals, error) {
 	return result, nil
 }
 
-func deriveInvoiceStatus(tx *gorm.DB, invoice lockedInvoice) error {
+func deriveInvoiceStatus(tx *gorm.DB, invoice lockedInvoice, asOf time.Time) error {
 	totals, err := loadTotals(tx, invoice.ID)
 	if err != nil {
 		return err
 	}
-	effectiveAmount := invoice.AmountMinor - totals.ApprovedCredits
-	status := "open"
-	if totals.NetPaid == effectiveAmount {
-		status = "paid"
-	} else if totals.NetPaid > 0 {
-		status = "partial"
-	} else if invoice.DueOn < time.Now().Format(time.DateOnly) {
-		status = "overdue"
+	dueOn, err := time.Parse(time.DateOnly, invoice.DueOn)
+	if err != nil {
+		return fmt.Errorf("parse invoice due date: %w", err)
 	}
+	status := financial.InvoiceStatus(invoice.AmountMinor-totals.ApprovedCredits, totals.NetPaid, dueOn, asOf)
 	if err := tx.Table("invoices").Where("id = ?", invoice.ID).Updates(map[string]any{"status": status, "updated_at": gorm.Expr("now()")}).Error; err != nil {
 		return fmt.Errorf("derive adjusted invoice status: %w", err)
 	}
@@ -277,12 +279,5 @@ func (r *PostgresRepository) getInvoice(ctx context.Context, organizationID, inv
 }
 
 func writeAudit(tx *gorm.DB, organizationID, actor, action, invoiceID string, metadata map[string]any) error {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("encode adjustment audit metadata: %w", err)
-	}
-	if err := tx.Exec(`INSERT INTO audit_events (organization_id, actor, action, entity_type, entity_id, metadata) VALUES (?, ?, ?, 'invoice', ?, ?::jsonb)`, organizationID, actor, action, invoiceID, string(encoded)).Error; err != nil {
-		return fmt.Errorf("write adjustment audit event: %w", err)
-	}
-	return nil
+	return audit.Write(tx, organizationID, actor, action, "invoice", invoiceID, metadata)
 }

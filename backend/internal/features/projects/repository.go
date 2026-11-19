@@ -2,11 +2,11 @@ package projects
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -173,7 +173,7 @@ func (r *PostgresRepository) DecideContract(ctx context.Context, organizationID,
 		if err != nil {
 			return err
 		}
-		if contract.Status != "pending" || contract.RequestedByID == actor.UserID {
+		if !canReviewPending(contract.Status, contract.RequestedByID, actor.UserID) {
 			return apperrors.ErrInvalidState
 		}
 		projectID = contract.ProjectID
@@ -197,7 +197,7 @@ func (r *PostgresRepository) CreateChangeOrder(ctx context.Context, organization
 		if err != nil {
 			return err
 		}
-		if contract.Status != "approved" || contract.OriginalValueMinor+contract.ApprovedChangesMinor+input.AmountMinor <= 0 || contract.OriginalValueMinor+contract.ApprovedChangesMinor+input.AmountMinor < contract.AllocatedMinor {
+		if !canApplyChange(contract.Status, contract.OriginalValueMinor, contract.ApprovedChangesMinor, contract.AllocatedMinor, input.AmountMinor) {
 			return apperrors.ErrInvalidState
 		}
 		projectID = contract.ProjectID
@@ -247,12 +247,11 @@ func (r *PostgresRepository) DecideChangeOrder(ctx context.Context, organization
 		if order.ID == "" {
 			return apperrors.ErrNotFound
 		}
-		if contract.Status != "approved" || order.Status != "pending" || order.RequestedByID == actor.UserID {
+		if contract.Status != "approved" || !canReviewPending(order.Status, order.RequestedByID, actor.UserID) {
 			return apperrors.ErrInvalidState
 		}
 		if input.Decision == "approved" {
-			revised := contract.OriginalValueMinor + contract.ApprovedChangesMinor + order.AmountMinor
-			if revised <= 0 || revised < contract.AllocatedMinor {
+			if !canApplyChange(contract.Status, contract.OriginalValueMinor, contract.ApprovedChangesMinor, contract.AllocatedMinor, order.AmountMinor) {
 				return apperrors.ErrInvalidState
 			}
 		}
@@ -277,8 +276,7 @@ func (r *PostgresRepository) CreateMilestone(ctx context.Context, organizationID
 		if err != nil {
 			return err
 		}
-		revised := contract.OriginalValueMinor + contract.ApprovedChangesMinor
-		if contract.Status != "approved" || contract.AllocatedMinor+input.AmountMinor > revised {
+		if !canAllocateMilestone(contract.Status, contract.OriginalValueMinor, contract.ApprovedChangesMinor, contract.AllocatedMinor, input.AmountMinor) {
 			return apperrors.ErrInvalidState
 		}
 		projectID = contract.ProjectID
@@ -321,7 +319,7 @@ func (r *PostgresRepository) InvoiceMilestone(ctx context.Context, organizationI
 		if milestone.ID == "" {
 			return apperrors.ErrNotFound
 		}
-		if milestone.Status != "planned" || milestone.ContractStatus != "approved" {
+		if !canInvoiceMilestone(milestone.Status, milestone.ContractStatus) {
 			return apperrors.ErrInvalidState
 		}
 		projectID = milestone.ProjectID
@@ -371,8 +369,8 @@ func (r *PostgresRepository) listAudit(ctx context.Context, organizationID, proj
 	}
 	events := make([]AuditEvent, 0, len(rows))
 	for _, item := range rows {
-		metadata := make(map[string]any)
-		if err := json.Unmarshal([]byte(item.Metadata), &metadata); err != nil {
+		metadata, err := audit.DecodeMetadata(item.Metadata)
+		if err != nil {
 			return nil, fmt.Errorf("decode project audit metadata: %w", err)
 		}
 		events = append(events, AuditEvent{ID: item.ID, Actor: item.Actor, Action: item.Action, Metadata: metadata, CreatedAt: item.CreatedAt})
@@ -389,12 +387,5 @@ func writeInvoiceAudit(tx *gorm.DB, organizationID, actor, invoiceID string, met
 }
 
 func writeAudit(tx *gorm.DB, organizationID, actor, action, entityType, entityID string, metadata map[string]any) error {
-	encoded, err := json.Marshal(metadata)
-	if err != nil {
-		return fmt.Errorf("encode project audit metadata: %w", err)
-	}
-	if err := tx.Exec(`INSERT INTO audit_events (organization_id,actor,action,entity_type,entity_id,metadata) VALUES (?,?,?,?,?,?::jsonb)`, organizationID, actor, action, entityType, entityID, string(encoded)).Error; err != nil {
-		return fmt.Errorf("write project audit event: %w", err)
-	}
-	return nil
+	return audit.Write(tx, organizationID, actor, action, entityType, entityID, metadata)
 }

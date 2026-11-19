@@ -17,9 +17,17 @@ type Repository interface {
 	RecordDeliveryEvent(context.Context, DeliveryEventInput, time.Time) error
 }
 
-type Service struct{ repository Repository }
+type Service struct {
+	repository Repository
+	now        func() time.Time
+}
 
-func NewService(repository Repository) *Service { return &Service{repository: repository} }
+func NewService(repository Repository) *Service {
+	return &Service{repository: repository, now: time.Now}
+}
+func newServiceWithClock(repository Repository, now func() time.Time) *Service {
+	return &Service{repository: repository, now: now}
+}
 func (s *Service) List(ctx context.Context, organizationID string) ([]Reminder, error) {
 	return s.repository.List(ctx, organizationID)
 }
@@ -47,7 +55,7 @@ func (s *Service) RecordDeliveryEvent(ctx context.Context, input DeliveryEventIn
 		return ErrInvalidDeliveryEvent
 	}
 	occurredAt, err := time.Parse(time.RFC3339, input.OccurredAt)
-	if err != nil || occurredAt.After(time.Now().Add(5*time.Minute)) {
+	if err != nil || occurredAt.After(s.now().Add(5*time.Minute)) {
 		return ErrInvalidDeliveryEvent
 	}
 	return s.repository.RecordDeliveryEvent(ctx, input, occurredAt)

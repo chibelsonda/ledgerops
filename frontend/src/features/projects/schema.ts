@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { toMinorUnits } from '@/shared/lib/money'
 
 const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date.')
 const moneyField = z.number().finite().positive('Enter an amount greater than zero.').max(1_000_000_000_000)
@@ -44,4 +45,4 @@ export type ChangeOrderFormValues = z.infer<typeof changeOrderFormSchema>
 export type MilestoneFormValues = z.infer<typeof milestoneFormSchema>
 export type InvoiceMilestoneFormValues = z.infer<typeof invoiceMilestoneFormSchema>
 
-export const toMinor = (amount: number) => Math.round(amount * 100)
+export const toMinor = toMinorUnits

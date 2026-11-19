@@ -2,7 +2,6 @@ package forecast
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -65,7 +64,7 @@ func (h *Handler) CreateScenario(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.CreateScenario(r.Context(), p.OrganizationID, forecastActor(p), input)
 	if err != nil {
-		if forecastValidation(w, err) {
+		if httpx.WriteValidationError(w, "invalid_cash_flow_forecast", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create cash-flow scenario", err)
@@ -88,7 +87,7 @@ func (h *Handler) AddAdjustment(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.service.AddAdjustment(r.Context(), p.OrganizationID, id, forecastActor(p), input)
 	if err != nil {
-		if forecastValidation(w, err) {
+		if httpx.WriteValidationError(w, "invalid_cash_flow_forecast", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "add cash-flow adjustment", err)
@@ -111,13 +110,5 @@ func forecastDecode(w http.ResponseWriter, r *http.Request, destination any) boo
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Provide a valid cash-flow forecast JSON body.")
 		return false
 	}
-	return true
-}
-func forecastValidation(w http.ResponseWriter, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_cash_flow_forecast", validation.Message)
 	return true
 }

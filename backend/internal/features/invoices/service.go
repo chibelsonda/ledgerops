@@ -3,6 +3,8 @@ package invoices
 import (
 	"context"
 	"fmt"
+
+	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
 )
 
 // Repository is the persistence boundary required by the invoice use cases.
@@ -17,9 +19,7 @@ type Repository interface {
 	RecordPayment(context.Context, string, string, Actor, PaymentInput) (PaymentResult, error)
 }
 
-type ValidationError struct{ Message string }
-
-func (e ValidationError) Error() string { return e.Message }
+type ValidationError = apperrors.ValidationError
 
 type Service struct{ repository Repository }
 

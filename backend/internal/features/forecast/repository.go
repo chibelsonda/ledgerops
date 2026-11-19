@@ -2,12 +2,12 @@ package forecast
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
+	"github.com/portfolio/ledgerops/backend/internal/platform/audit"
 	"gorm.io/gorm"
 )
 
@@ -162,14 +162,9 @@ func (r *PostgresRepository) AddAdjustment(ctx context.Context, organizationID, 
 		if err := tx.Raw(`INSERT INTO cash_flow_adjustments (organization_id,scenario_id,week_start,direction,label,amount_minor,created_by) VALUES (?,?,?::date,?,?,?,?) RETURNING id::text AS id`, organizationID, scenarioID, input.WeekStart, input.Direction, input.Label, input.AmountMinor, actor.UserID).Scan(&row).Error; err != nil {
 			return fmt.Errorf("insert forecast adjustment: %w", err)
 		}
-		metadata, err := json.Marshal(map[string]any{"adjustmentId": row.ID, "weekStart": input.WeekStart, "direction": input.Direction, "label": input.Label, "amountMinor": input.AmountMinor})
-		if err != nil {
-			return fmt.Errorf("encode forecast audit: %w", err)
-		}
-		if err := tx.Exec(`INSERT INTO audit_events (organization_id,actor,action,entity_type,entity_id,metadata) VALUES (?,?,'cash_flow.adjustment_added','cash_flow_scenario',?,?::jsonb)`, organizationID, actor.Email, scenarioID, string(metadata)).Error; err != nil {
-			return fmt.Errorf("write forecast audit: %w", err)
-		}
-		return nil
+		return audit.Write(tx, organizationID, actor.Email, "cash_flow.adjustment_added", "cash_flow_scenario", scenarioID, map[string]any{
+			"adjustmentId": row.ID, "weekStart": input.WeekStart, "direction": input.Direction, "label": input.Label, "amountMinor": input.AmountMinor,
+		})
 	})
 	if err != nil {
 		return Forecast{}, fmt.Errorf("add forecast adjustment transaction: %w", err)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/mail"
 	"strings"
+
+	"github.com/portfolio/ledgerops/backend/internal/platform/apperrors"
 )
 
 type Repository interface {
@@ -15,9 +17,7 @@ type Repository interface {
 	UpdateContact(context.Context, string, string, Actor, ContactInput) (Contact, error)
 }
 
-type ValidationError struct{ Message string }
-
-func (e ValidationError) Error() string { return e.Message }
+type ValidationError = apperrors.ValidationError
 
 type Service struct{ repository Repository }
 
@@ -30,7 +30,7 @@ func (s *Service) List(ctx context.Context, organizationID string, params ListPa
 func (s *Service) Create(ctx context.Context, organizationID string, actor Actor, input MutationInput) (Client, error) {
 	normalizeMutation(&input)
 	if message := validateMutation(input, true); message != "" {
-		return Client{}, ValidationError{message}
+		return Client{}, ValidationError{Message: message}
 	}
 	return s.repository.Create(ctx, organizationID, actor, input)
 }
@@ -38,7 +38,7 @@ func (s *Service) Create(ctx context.Context, organizationID string, actor Actor
 func (s *Service) Update(ctx context.Context, organizationID, clientID string, actor Actor, input MutationInput) (Client, error) {
 	normalizeMutation(&input)
 	if message := validateMutation(input, false); message != "" {
-		return Client{}, ValidationError{message}
+		return Client{}, ValidationError{Message: message}
 	}
 	return s.repository.Update(ctx, organizationID, clientID, actor, input)
 }
@@ -50,7 +50,7 @@ func (s *Service) ListContacts(ctx context.Context, organizationID, clientID str
 func (s *Service) CreateContact(ctx context.Context, organizationID, clientID string, actor Actor, input ContactInput) (Contact, error) {
 	normalizeContact(&input)
 	if message := validateContact(input); message != "" {
-		return Contact{}, ValidationError{message}
+		return Contact{}, ValidationError{Message: message}
 	}
 	return s.repository.CreateContact(ctx, organizationID, clientID, actor, input)
 }
@@ -58,7 +58,7 @@ func (s *Service) CreateContact(ctx context.Context, organizationID, clientID st
 func (s *Service) UpdateContact(ctx context.Context, organizationID, contactID string, actor Actor, input ContactInput) (Contact, error) {
 	normalizeContact(&input)
 	if message := validateContact(input); message != "" {
-		return Contact{}, ValidationError{message}
+		return Contact{}, ValidationError{Message: message}
 	}
 	return s.repository.UpdateContact(ctx, organizationID, contactID, actor, input)
 }

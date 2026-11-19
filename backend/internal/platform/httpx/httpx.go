@@ -68,6 +68,15 @@ func WriteError(w http.ResponseWriter, status int, code, message string) {
 	WriteJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
 }
 
+func WriteValidationError(w http.ResponseWriter, code string, err error) bool {
+	var validation apperrors.ValidationError
+	if !errors.As(err, &validation) {
+		return false
+	}
+	WriteError(w, http.StatusUnprocessableEntity, code, validation.Message)
+	return true
+}
+
 func HandleApplicationError(w http.ResponseWriter, logger *slog.Logger, operation string, err error) {
 	if errors.Is(err, apperrors.ErrNotFound) {
 		WriteError(w, http.StatusNotFound, "not_found", "The requested record was not found.")

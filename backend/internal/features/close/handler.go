@@ -2,7 +2,6 @@ package close
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -69,7 +68,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.Create(r.Context(), p.OrganizationID, actor(p), input)
 	if err != nil {
-		if writeValidation(w, err) {
+		if httpx.WriteValidationError(w, "invalid_month_end_close", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "create close period", err)
@@ -93,7 +92,7 @@ func (h *Handler) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.UpdateTask(r.Context(), p.OrganizationID, id, actor(p), input)
 	if err != nil {
-		if writeValidation(w, err) {
+		if httpx.WriteValidationError(w, "invalid_month_end_close", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "update close task", err)
@@ -134,7 +133,7 @@ func (h *Handler) Decide(w http.ResponseWriter, r *http.Request) {
 	}
 	detail, err := h.service.Decide(r.Context(), p.OrganizationID, id, actor(p), input)
 	if err != nil {
-		if writeValidation(w, err) {
+		if httpx.WriteValidationError(w, "invalid_month_end_close", err) {
 			return
 		}
 		httpx.HandleApplicationError(w, h.logger, "decide close period", err)
@@ -157,13 +156,5 @@ func decode(w http.ResponseWriter, r *http.Request, destination any) bool {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Provide a valid month-end close JSON body.")
 		return false
 	}
-	return true
-}
-func writeValidation(w http.ResponseWriter, err error) bool {
-	var validation ValidationError
-	if !errors.As(err, &validation) {
-		return false
-	}
-	httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_month_end_close", validation.Message)
 	return true
 }
