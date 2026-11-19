@@ -25,7 +25,7 @@ export default defineRailway(() => {
       AUTH_COOKIE_SECURE: preserve(),
       AUTH_SESSION_IDLE_TTL: preserve(),
       AUTH_SESSION_TTL: preserve(),
-      DATABASE_URL: preserve(),
+      DATABASE_URL: database.env.DATABASE_URL,
       EMAIL_DELIVERY_POLL_INTERVAL: preserve(),
       FRONTEND_URL: preserve(),
       LOGIN_RATE_LIMIT_REQUESTS: preserve(),
