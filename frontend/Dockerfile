@@ -5,7 +5,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx/nginx-unprivileged:1.30.6-alpine@sha256:ea4fd7ab5a8dc6348c18240bd3546f355f8373cd8f112580f7d8bd8ff5a74772
+FROM nginx/nginx-unprivileged:1.31.8-alpine@sha256:f90ef283a8a580912aa56315c3ed8f54cf50c2e89ed7e6fbf4c53368b55d712f
 ENV API_HOST=api \
     API_PORT=8080 \
     NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 \
