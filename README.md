@@ -4,6 +4,14 @@ LedgerOps is a production-shaped FinOps portfolio project: a Go and PostgreSQL b
 
 ![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white) ![GORM](https://img.shields.io/badge/GORM-PostgreSQL-00ADD8) ![React](https://img.shields.io/badge/React-TypeScript-149ECA?logo=react&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
 
+## Product tour
+
+| Financial command center | Accounts receivable |
+| --- | --- |
+| [![LedgerOps financial overview](docs/screenshots/overview.png)](docs/screenshots/overview.png) | [![LedgerOps invoice operations](docs/screenshots/invoices.png)](docs/screenshots/invoices.png) |
+| **Month-end close workspace** | **13-week cash-flow forecast** |
+| [![LedgerOps month-end close workspace](docs/screenshots/month-end-close.png)](docs/screenshots/month-end-close.png) | [![LedgerOps cash-flow forecast](docs/screenshots/cash-flow-forecast.png)](docs/screenshots/cash-flow-forecast.png) |
+
 ## What it demonstrates
 
 - Correct money handling with integer minor units
