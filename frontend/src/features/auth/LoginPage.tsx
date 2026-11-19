@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { LockKeyhole, ShieldCheck } from 'lucide-react'
+import { LockKeyhole } from 'lucide-react'
 import { useForm } from 'react-hook-form'
+import { Link } from 'react-router-dom'
 import { Button } from '@/shared/ui/Button'
-import { Input } from '@/shared/ui/FormControls'
-import { LedgerOpsMark } from '@/shared/ui/LedgerOpsMark'
+import { Input, PasswordInput } from '@/shared/ui/FormControls'
+import { AuthLayout } from './AuthLayout'
 import { useAuth } from './AuthProvider'
 import { loginSchema, type LoginFormValues } from './schema'
 
@@ -23,32 +24,18 @@ export function LoginPage() {
   })
 
   return (
-    <main className="login-page">
-      <section className="login-story" aria-label="LedgerOps introduction">
-        <div className="login-brand"><span className="brand-mark"><LedgerOpsMark /></span><span>LedgerOps</span></div>
-        <div>
-          <span className="eyebrow">Financial command center</span>
-          <h1>Decisions start with numbers you can trust.</h1>
-          <p>Review cash, receivables, budgets, and exceptions from one focused workspace.</p>
-        </div>
-        <div className="login-security"><ShieldCheck size={18} /><span>Protected by server-side sessions and role-based access.</span></div>
-      </section>
-      <section className="login-panel">
-        <div className="login-card">
-          <span className="eyebrow">Welcome back</span>
-          <h2>Sign in to LedgerOps</h2>
-          <p>Use your assigned workspace account.</p>
-          <form onSubmit={submit} className="login-form" noValidate>
+    <AuthLayout eyebrow="Welcome back" title="Sign in to LedgerOps" description="Use your workspace account to continue.">
+      <form onSubmit={submit} className="login-form" noValidate>
             <Input label="Email address" type="email" autoComplete="email" error={errors.email?.message} {...register('email')} />
-            <Input label="Password" type="password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
+            <PasswordInput label="Password" autoComplete="current-password" error={errors.password?.message} {...register('password')} />
+            <div className="auth-form-link"><Link to="/forgot-password">Forgot password?</Link></div>
             {errors.root?.message && <p className="login-error" role="alert">{errors.root.message}</p>}
             <Button type="submit" full disabled={isSubmitting}>
               {isSubmitting ? <LockKeyhole size={15} className="spin" /> : <LockKeyhole size={15} />}
               {isSubmitting ? 'Signing in' : 'Sign in securely'}
             </Button>
           </form>
-        </div>
-      </section>
-    </main>
+      <p className="auth-switch">New to LedgerOps? <Link to="/register">Create an account</Link></p>
+    </AuthLayout>
   )
 }

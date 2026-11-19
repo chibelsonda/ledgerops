@@ -40,6 +40,7 @@ func TestProductionConfigAcceptsSecureValues(t *testing.T) {
 	config.DatabaseURL = "postgres://app:strong-password@db/ledgerops?sslmode=verify-full"
 	config.MigrationDatabaseURL = "postgres://migrator:different-password@db/ledgerops?sslmode=verify-full"
 	config.Auth.CookieSecure = true
+	config.Email = EmailConfig{SMTPHost: "smtp.example", SMTPPort: 587, FromAddress: "noreply@ledgerops.example", RequireTLS: true, WebhookSecret: strings.Repeat("a", 32)}
 
 	if err := config.Validate(); err != nil {
 		t.Fatalf("validate secure production config: %v", err)

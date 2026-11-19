@@ -26,7 +26,22 @@ import (
 func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handler, error) {
 	mux := http.NewServeMux()
 	protectedMux := http.NewServeMux()
-	authService, err := auth.NewService(auth.NewPostgresRepository(db), cfg.Auth.SessionTTL, cfg.Auth.SessionIdleTTL)
+	authOptions := []auth.ServiceOption{
+		auth.WithPasswordResetURL(cfg.FrontendURL, cfg.Environment == "development"),
+	}
+	if cfg.Email.Configured() {
+		sender, err := reminders.NewSMTPProvider(reminders.SMTPOptions{
+			Host: cfg.Email.SMTPHost, Port: cfg.Email.SMTPPort,
+			Username: cfg.Email.SMTPUsername, Password: cfg.Email.SMTPPassword,
+			FromAddress: cfg.Email.FromAddress, FromName: cfg.Email.FromName,
+			RequireTLS: cfg.Email.RequireTLS,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("configure password reset email: %w", err)
+		}
+		authOptions = append(authOptions, auth.WithPasswordResetNotifier(passwordResetMailer{sender: sender}))
+	}
+	authService, err := auth.NewService(auth.NewPostgresRepository(db), cfg.Auth.SessionTTL, cfg.Auth.SessionIdleTTL, authOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("configure authentication: %w", err)
 	}
@@ -93,6 +108,9 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 		return sqlDB.PingContext(ctx)
 	}, logger))
 	mux.Handle("POST /api/v1/auth/login", loginLimiter.Middleware(http.HandlerFunc(authHandler.Login), clientIP.Key))
+	mux.Handle("POST /api/v1/auth/register", loginLimiter.Middleware(http.HandlerFunc(authHandler.Register), clientIP.Key))
+	mux.Handle("POST /api/v1/auth/password-reset/request", loginLimiter.Middleware(http.HandlerFunc(authHandler.RequestPasswordReset), clientIP.Key))
+	mux.Handle("POST /api/v1/auth/password-reset/confirm", loginLimiter.Middleware(http.HandlerFunc(authHandler.ResetPassword), clientIP.Key))
 	mux.HandleFunc("GET /api/v1/auth/session", authHandler.Session)
 	mux.Handle("GET /api/v1/integrations/quickbooks/callback", sensitiveLimiter.Middleware(http.HandlerFunc(quickBooksHandler.Callback), clientIP.Key))
 	mux.Handle("POST /api/v1/integrations/email/webhook", sensitiveLimiter.Middleware(http.HandlerFunc(remindersHandler.DeliveryWebhook), clientIP.Key))

@@ -40,3 +40,36 @@ type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
+type RegisterRequest struct {
+	OrganizationName string `json:"organizationName"`
+	DisplayName      string `json:"displayName"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+}
+
+type NewAccount struct {
+	OrganizationName string
+	DisplayName      string
+	Email            string
+	PasswordHash     string
+}
+
+type PasswordResetRequest struct {
+	Email string `json:"email"`
+}
+
+type PasswordResetConfirmRequest struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"newPassword"`
+}
+
+type PasswordResetResponse struct {
+	Message  string `json:"message"`
+	ResetURL string `json:"resetUrl,omitempty"`
+}
+
+type PasswordResetRecipient struct {
+	Email       string
+	DisplayName string
+}

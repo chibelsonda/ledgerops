@@ -19,3 +19,24 @@ export interface LoginCredentials {
   email: string
   password: string
 }
+
+export interface RegistrationInput {
+  organizationName: string
+  displayName: string
+  email: string
+  password: string
+}
+
+export interface PasswordResetRequestInput {
+  email: string
+}
+
+export interface PasswordResetConfirmInput {
+  token: string
+  newPassword: string
+}
+
+export interface PasswordResetRequestResponse {
+  message: string
+  resetUrl?: string
+}

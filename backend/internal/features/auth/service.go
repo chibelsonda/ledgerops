@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -15,10 +16,14 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidLogin       = errors.New("invalid login request")
-	ErrUnauthenticated    = errors.New("authentication required")
-	ErrInvalidCSRF        = errors.New("invalid CSRF token")
+	ErrInvalidCredentials  = errors.New("invalid credentials")
+	ErrInvalidLogin        = errors.New("invalid login request")
+	ErrUnauthenticated     = errors.New("authentication required")
+	ErrInvalidCSRF         = errors.New("invalid CSRF token")
+	ErrInvalidRegistration = errors.New("invalid registration request")
+	ErrEmailInUse          = errors.New("email address is already registered")
+	ErrInvalidResetRequest = errors.New("invalid password reset request")
+	ErrInvalidResetToken   = errors.New("invalid or expired password reset token")
 )
 
 const (
@@ -26,22 +31,119 @@ const (
 	csrfTokenBytes    = 32
 	maxLoginAttempts  = 5
 	lockoutDuration   = 15 * time.Minute
+	passwordResetTTL  = 30 * time.Minute
 )
 
-type Service struct {
-	repository     Repository
-	sessionTTL     time.Duration
-	sessionIdleTTL time.Duration
-	dummyHash      string
-	now            func() time.Time
+type PasswordResetNotifier interface {
+	SendPasswordReset(context.Context, string, string, string) error
 }
 
-func NewService(repository Repository, sessionTTL, sessionIdleTTL time.Duration) (*Service, error) {
+type ServiceOption func(*Service)
+
+func WithPasswordResetNotifier(notifier PasswordResetNotifier) ServiceOption {
+	return func(service *Service) { service.passwordResetNotifier = notifier }
+}
+
+func WithPasswordResetURL(frontendURL string, exposePreview bool) ServiceOption {
+	return func(service *Service) {
+		service.frontendURL = strings.TrimRight(frontendURL, "/")
+		service.exposeResetPreview = exposePreview
+	}
+}
+
+type Service struct {
+	repository            Repository
+	sessionTTL            time.Duration
+	sessionIdleTTL        time.Duration
+	dummyHash             string
+	now                   func() time.Time
+	passwordResetNotifier PasswordResetNotifier
+	frontendURL           string
+	exposeResetPreview    bool
+}
+
+func NewService(repository Repository, sessionTTL, sessionIdleTTL time.Duration, options ...ServiceOption) (*Service, error) {
 	dummyHash, err := HashPassword("timing-only-password-value")
 	if err != nil {
 		return nil, err
 	}
-	return &Service{repository: repository, sessionTTL: sessionTTL, sessionIdleTTL: sessionIdleTTL, dummyHash: dummyHash, now: time.Now}, nil
+	service := &Service{repository: repository, sessionTTL: sessionTTL, sessionIdleTTL: sessionIdleTTL, dummyHash: dummyHash, now: time.Now}
+	for _, option := range options {
+		option(service)
+	}
+	return service, nil
+}
+
+func (s *Service) Register(ctx context.Context, request RegisterRequest) (SessionResponse, string, error) {
+	account := NewAccount{
+		OrganizationName: strings.TrimSpace(request.OrganizationName),
+		DisplayName:      strings.TrimSpace(request.DisplayName),
+		Email:            strings.ToLower(strings.TrimSpace(request.Email)),
+	}
+	if len(account.OrganizationName) < 2 || len(account.OrganizationName) > 120 ||
+		len(account.DisplayName) < 2 || len(account.DisplayName) > 120 ||
+		!validEmail(account.Email) || !validPassword(request.Password) {
+		return SessionResponse{}, "", ErrInvalidRegistration
+	}
+	passwordHash, err := HashPassword(request.Password)
+	if err != nil {
+		return SessionResponse{}, "", fmt.Errorf("hash registration password: %w", err)
+	}
+	account.PasswordHash = passwordHash
+	user, err := s.repository.CreateAccount(ctx, account)
+	if err != nil {
+		return SessionResponse{}, "", err
+	}
+	return s.createSession(ctx, *user)
+}
+
+func (s *Service) RequestPasswordReset(ctx context.Context, request PasswordResetRequest) (PasswordResetResponse, error) {
+	email := strings.ToLower(strings.TrimSpace(request.Email))
+	if !validEmail(email) {
+		return PasswordResetResponse{}, ErrInvalidResetRequest
+	}
+	token, tokenHash, err := randomToken(sessionTokenBytes)
+	if err != nil {
+		return PasswordResetResponse{}, err
+	}
+	now := s.now()
+	recipient, err := s.repository.CreatePasswordReset(ctx, email, tokenHash, now, now.Add(passwordResetTTL))
+	if err != nil {
+		return PasswordResetResponse{}, err
+	}
+	response := PasswordResetResponse{Message: "If an account exists for that email, a password reset link has been sent."}
+	resetURL, err := s.passwordResetURL(token)
+	if err != nil {
+		return PasswordResetResponse{}, err
+	}
+	if s.exposeResetPreview {
+		response.ResetURL = resetURL
+	}
+	if recipient == nil {
+		return response, nil
+	}
+	if s.passwordResetNotifier != nil {
+		if err := s.passwordResetNotifier.SendPasswordReset(ctx, recipient.Email, recipient.DisplayName, resetURL); err != nil {
+			return response, fmt.Errorf("send password reset: %w", err)
+		}
+	}
+	return response, nil
+}
+
+func (s *Service) ResetPassword(ctx context.Context, request PasswordResetConfirmRequest) error {
+	if !validPassword(request.NewPassword) {
+		return ErrInvalidResetRequest
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(request.Token)
+	if err != nil || len(decoded) != sessionTokenBytes {
+		return ErrInvalidResetToken
+	}
+	tokenHash := sha256.Sum256(decoded)
+	passwordHash, err := HashPassword(request.NewPassword)
+	if err != nil {
+		return fmt.Errorf("hash reset password: %w", err)
+	}
+	return s.repository.ConsumePasswordReset(ctx, tokenHash[:], passwordHash, s.now())
 }
 
 func (s *Service) Login(ctx context.Context, request LoginRequest) (SessionResponse, string, error) {
@@ -73,6 +175,10 @@ func (s *Service) Login(ctx context.Context, request LoginRequest) (SessionRespo
 	if err := s.repository.ResetFailedLogins(ctx, user.ID); err != nil {
 		return SessionResponse{}, "", err
 	}
+	return s.createSession(ctx, *user)
+}
+
+func (s *Service) createSession(ctx context.Context, user User) (SessionResponse, string, error) {
 	sessionToken, sessionHash, err := randomToken(sessionTokenBytes)
 	if err != nil {
 		return SessionResponse{}, "", err
@@ -81,15 +187,33 @@ func (s *Service) Login(ctx context.Context, request LoginRequest) (SessionRespo
 	if err != nil {
 		return SessionResponse{}, "", err
 	}
-	expiresAt := now.Add(s.sessionTTL)
+	expiresAt := s.now().Add(s.sessionTTL)
 	if err := s.repository.CreateSession(ctx, user.ID, user.OrganizationID, sessionHash, csrfHash, expiresAt); err != nil {
 		return SessionResponse{}, "", err
 	}
 	return SessionResponse{
-		User:      principalFromUser(*user),
+		User:      principalFromUser(user),
 		CSRFToken: csrfToken,
 		ExpiresAt: expiresAt,
 	}, sessionToken, nil
+}
+
+func (s *Service) passwordResetURL(token string) (string, error) {
+	if s.frontendURL == "" {
+		return "", errors.New("frontend URL is not configured")
+	}
+	resetURL, err := url.Parse(s.frontendURL + "/reset-password")
+	if err != nil {
+		return "", fmt.Errorf("build password reset URL: %w", err)
+	}
+	query := resetURL.Query()
+	query.Set("token", token)
+	resetURL.RawQuery = query.Encode()
+	return resetURL.String(), nil
+}
+
+func validPassword(value string) bool {
+	return len(value) >= 12 && len(value) <= 128
 }
 
 func (s *Service) RefreshSession(ctx context.Context, sessionToken string) (SessionResponse, error) {

@@ -2,6 +2,9 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoadingState } from '@/shared/ui/ViewState'
 import { LoginPage } from '@/features/auth/LoginPage'
+import { RegisterPage } from '@/features/auth/RegisterPage'
+import { ForgotPasswordPage } from '@/features/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/features/auth/ResetPasswordPage'
 import { useAuth } from '@/features/auth/AuthProvider'
 import { capabilities } from '@/shared/lib/capabilities'
 import { AppShell } from './AppShell'
@@ -19,7 +22,17 @@ const ForecastPage = lazy(() => import('@/features/forecast/ForecastPage').then(
 export default function App() {
   const { session, isLoading } = useAuth()
   if (isLoading) return <LoadingState label="Restoring your secure session" />
-  if (!session) return <LoginPage />
+  if (!session) {
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    )
+  }
   const canOperateSync = capabilities.operate(session.user.role)
 
   return (

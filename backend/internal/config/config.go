@@ -153,6 +153,9 @@ func (c Config) Validate() error {
 		if !c.Auth.CookieSecure {
 			problems = append(problems, fmt.Errorf("AUTH_COOKIE_SECURE must be true in production"))
 		}
+		if !c.Email.Configured() {
+			problems = append(problems, fmt.Errorf("SMTP_HOST and EMAIL_FROM_ADDRESS are required for password reset in production"))
+		}
 		for name, value := range map[string]string{"ALLOWED_ORIGIN": c.AllowedOrigin, "FRONTEND_URL": c.FrontendURL} {
 			parsed, _ := url.Parse(value)
 			if parsed == nil || parsed.Scheme != "https" {

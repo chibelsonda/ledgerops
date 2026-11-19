@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useCallback, useContext, useEffect } from 'react'
 import { ApiError, setCSRFToken } from '@/shared/api/http'
 import { authApi } from './api'
-import type { LoginCredentials, Session } from './types'
+import type { LoginCredentials, RegistrationInput, Session } from './types'
 
 const sessionQueryKey = ['auth', 'session'] as const
 
@@ -10,6 +10,7 @@ interface AuthContextValue {
   session: Session | null
   isLoading: boolean
   login: (credentials: LoginCredentials) => Promise<void>
+  registerAccount: (input: RegistrationInput) => Promise<void>
   logout: () => Promise<void>
 }
 
@@ -46,6 +47,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient])
 
+  const registerAccount = useCallback(async (input: RegistrationInput) => {
+    const session = await authApi.register(input)
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' })
+    queryClient.setQueryData(sessionQueryKey, session)
+  }, [queryClient])
+
   useEffect(() => {
     const handleUnauthorized = () => {
       setCSRFToken('')
@@ -57,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient])
 
   return (
-    <AuthContext.Provider value={{ session: sessionQuery.data ?? null, isLoading: sessionQuery.isLoading, login, logout }}>
+    <AuthContext.Provider value={{ session: sessionQuery.data ?? null, isLoading: sessionQuery.isLoading, login, registerAccount, logout }}>
       {children}
     </AuthContext.Provider>
   )

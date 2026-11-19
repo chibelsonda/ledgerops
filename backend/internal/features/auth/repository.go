@@ -2,15 +2,20 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/portfolio/ledgerops/backend/internal/platform/identity"
 	"gorm.io/gorm"
 )
 
 type Repository interface {
 	FindUserByEmail(context.Context, string) (*User, error)
+	CreateAccount(context.Context, NewAccount) (*User, error)
+	CreatePasswordReset(context.Context, string, []byte, time.Time, time.Time) (*PasswordResetRecipient, error)
+	ConsumePasswordReset(context.Context, []byte, string, time.Time) error
 	RecordFailedLogin(context.Context, string, time.Time, int, time.Duration) error
 	ResetFailedLogins(context.Context, string) error
 	CreateSession(context.Context, string, string, []byte, []byte, time.Time) error
@@ -18,6 +23,95 @@ type Repository interface {
 	RotateCSRF(context.Context, int64, []byte, time.Time) error
 	TouchSession(context.Context, int64, time.Time) error
 	RevokeSession(context.Context, []byte, time.Time) error
+}
+
+func (r *PostgresRepository) CreateAccount(ctx context.Context, account NewAccount) (*User, error) {
+	var created User
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var organizationID string
+		if err := tx.Raw(`INSERT INTO organizations (name) VALUES (?) RETURNING id::text`, account.OrganizationName).Scan(&organizationID).Error; err != nil {
+			return fmt.Errorf("create organization: %w", err)
+		}
+		var userID string
+		if err := tx.Raw(`
+			INSERT INTO users (email,display_name,password_hash)
+			VALUES (?,?,?) RETURNING id::text`, account.Email, account.DisplayName, account.PasswordHash).Scan(&userID).Error; err != nil {
+			var postgresError *pgconn.PgError
+			if errors.As(err, &postgresError) && postgresError.Code == "23505" {
+				return ErrEmailInUse
+			}
+			return fmt.Errorf("create user: %w", err)
+		}
+		if err := tx.Exec(`
+			INSERT INTO organization_memberships (organization_id,user_id,role)
+			VALUES (?,?,'admin')`, organizationID, userID).Error; err != nil {
+			return fmt.Errorf("create organization membership: %w", err)
+		}
+		created = User{
+			ID: userID, OrganizationID: organizationID, OrganizationName: account.OrganizationName,
+			Email: account.Email, DisplayName: account.DisplayName, PasswordHash: account.PasswordHash,
+			Role: identity.RoleAdmin, Active: true,
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &created, nil
+}
+
+func (r *PostgresRepository) CreatePasswordReset(ctx context.Context, email string, tokenHash []byte, now, expiresAt time.Time) (*PasswordResetRecipient, error) {
+	var recipient PasswordResetRecipient
+	result := r.db.WithContext(ctx).Raw(`
+		WITH target AS (
+			SELECT id FROM users WHERE lower(email)=lower(?) AND active=true LIMIT 1
+		), invalidated AS (
+			UPDATE password_reset_tokens p SET used_at=? FROM target t
+			WHERE p.user_id=t.id AND p.used_at IS NULL
+		), inserted AS (
+			INSERT INTO password_reset_tokens (user_id,token_hash,expires_at)
+			SELECT id,?,? FROM target RETURNING user_id
+		)
+		SELECT u.email,u.display_name FROM inserted i JOIN users u ON u.id=i.user_id`,
+		email, now, tokenHash, expiresAt).Scan(&recipient)
+	if result.Error != nil {
+		return nil, fmt.Errorf("create password reset: %w", result.Error)
+	}
+	if result.RowsAffected == 0 || recipient.Email == "" {
+		return nil, nil
+	}
+	return &recipient, nil
+}
+
+func (r *PostgresRepository) ConsumePasswordReset(ctx context.Context, tokenHash []byte, passwordHash string, now time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var reset struct {
+			ID     int64
+			UserID string
+		}
+		result := tx.Raw(`
+			SELECT id,user_id::text AS user_id FROM password_reset_tokens
+			WHERE token_hash=? AND used_at IS NULL AND expires_at>?
+			FOR UPDATE`, tokenHash, now).Scan(&reset)
+		if result.Error != nil {
+			return fmt.Errorf("find password reset: %w", result.Error)
+		}
+		if result.RowsAffected == 0 || reset.UserID == "" {
+			return ErrInvalidResetToken
+		}
+		if err := tx.Exec(`
+			UPDATE users SET password_hash=?,failed_login_attempts=0,locked_until=NULL,updated_at=?
+			WHERE id=? AND active=true`, passwordHash, now, reset.UserID).Error; err != nil {
+			return fmt.Errorf("update password: %w", err)
+		}
+		if err := tx.Exec(`UPDATE password_reset_tokens SET used_at=? WHERE id=?`, now, reset.ID).Error; err != nil {
+			return fmt.Errorf("consume password reset: %w", err)
+		}
+		if err := tx.Exec(`UPDATE auth_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL`, now, reset.UserID).Error; err != nil {
+			return fmt.Errorf("revoke reset sessions: %w", err)
+		}
+		return nil
+	})
 }
 
 type PostgresRepository struct {

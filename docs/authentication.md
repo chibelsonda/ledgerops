@@ -22,6 +22,15 @@ These credentials are seeded only for the local portfolio environment and must n
 - Login failures use a generic response, and nonexistent accounts still perform a password hash calculation to reduce timing differences.
 - Login is rate-limited per client IP, and authenticated API traffic is limited both per IP and per user.
 
+## Account creation and recovery
+
+- Public registration creates a new organization and assigns the first user the `admin` role.
+- Registration, login, reset requests, and reset confirmations share the stricter authentication rate limit.
+- Password reset responses do not reveal whether an email address exists.
+- Reset tokens contain 256 bits of randomness. Only their SHA-256 hashes are stored, and each token expires after 30 minutes and can be used once.
+- Completing a password reset revokes every existing session for that user and clears any login lockout.
+- Development responses include a local reset link so the flow works without SMTP. Production requires SMTP and never includes the token in the API response.
+
 Set `AUTH_COOKIE_SECURE=true` whenever the app is served through HTTPS. Production mode refuses to start without it.
 
 ## Permissions
