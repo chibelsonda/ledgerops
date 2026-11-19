@@ -23,7 +23,9 @@ LedgerOps is a production-shaped FinOps portfolio project: a Go and PostgreSQL b
 - Zod and React Hook Form validation
 - Go unit and HTTP tests, Vitest, Playwright, and CI
 - Safe migration and third-party integration runbooks
-- QuickBooks sandbox OAuth with hashed state and AES-256-GCM token encryption
+- QuickBooks OAuth with hashed state, local AES-256-GCM encryption, and production AWS KMS support
+- Full and CDC QuickBooks imports for Accounts, Vendors, Customers, Invoices, Payments, Purchases, Bills, Bill Payments, and Credit Memos
+- HMAC-verified webhooks, per-entity progress, hourly scheduling, revocation, deletion reconciliation, and transactional outbound writes
 - Argon2id passwords, hashed opaque sessions, CSRF protection, and workspace RBAC
 
 ## Run it natively
@@ -53,7 +55,7 @@ mara@ledgerops.demo
 LedgerOpsDemo!2026
 ```
 
-To connect a real QuickBooks Online sandbox, add the development credentials and a stable token-encryption key described in [the integration runbook](docs/integration-runbook.md), restart the API, and choose **Data sync → Connect QuickBooks**.
+To connect a real QuickBooks Online sandbox, add the development credentials and a stable token-encryption key described in [the integration runbook](docs/integration-runbook.md), restart the API and worker, choose **Data sync → Connect QuickBooks**, then run a sandbox sync.
 
 To deliver collection reminders, set `SMTP_HOST`, `SMTP_PORT`, and `EMAIL_FROM_ADDRESS` in `ledgerops/.env` (plus credentials when required), then restart the worker. Set `EMAIL_WEBHOOK_SECRET` on the API and on the trusted email relay that posts normalized delivery events to `POST /api/v1/integrations/email/webhook`. If SMTP is omitted, reminders remain queued and are never reported as sent.
 
@@ -92,7 +94,7 @@ docs/                  architecture and operational runbooks
 
 ## Intentional demo boundaries
 
-The app includes a real QuickBooks sandbox OAuth connection and verifies the authorized company through the Accounting API. The sync worker still processes the seeded QuickBooks-shaped snapshot so reviewers can exercise the queue without private credentials; importing remote entities through the stored connection is the next adapter increment. See [the integration runbook](docs/integration-runbook.md) and [architecture notes](docs/architecture.md).
+The app connects to a real QuickBooks sandbox. The first run performs a paginated full import; later runs use per-entity CDC cursors, while verified Intuit webhooks enqueue the same idempotent recovery path. LedgerOps clients, invoices, and invoice payments use a PostgreSQL transactional outbox for outbound writes; accounts-payable entities remain inbound-only by design. Production configuration requires AWS KMS and an Intuit webhook verifier. See [the integration runbook](docs/integration-runbook.md) and [architecture notes](docs/architecture.md).
 
 The included accounts demonstrate `admin`, `controller`, and `reviewer` workspace roles. Controllers can submit project contracts and change orders, while an admin must approve them; requesters cannot approve their own submissions. Approved contract value caps milestone allocation, and milestone invoicing creates a protected invoice and audit trail atomically. Organization access is always derived from the verified server-side session; the browser cannot select a tenant through a trusted header. Demo credentials are for local portfolio use only.
 

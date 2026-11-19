@@ -11,19 +11,21 @@ import (
 )
 
 type Config struct {
-	Environment          string
-	Port                 string
-	DatabaseURL          string
-	MigrationDatabaseURL string
-	AllowedOrigin        string
-	FrontendURL          string
-	SeedDemo             bool
-	WorkerPollInterval   time.Duration
-	ReminderPollInterval time.Duration
-	Auth                 AuthConfig
-	RateLimit            RateLimitConfig
-	QuickBooks           QuickBooksConfig
-	Email                EmailConfig
+	Environment                    string
+	Port                           string
+	DatabaseURL                    string
+	MigrationDatabaseURL           string
+	AllowedOrigin                  string
+	FrontendURL                    string
+	SeedDemo                       bool
+	WorkerPollInterval             time.Duration
+	ReminderPollInterval           time.Duration
+	QuickBooksSchedulePollInterval time.Duration
+	QuickBooksOutboxPollInterval   time.Duration
+	Auth                           AuthConfig
+	RateLimit                      RateLimitConfig
+	QuickBooks                     QuickBooksConfig
+	Email                          EmailConfig
 }
 
 type AuthConfig struct {
@@ -48,6 +50,9 @@ type QuickBooksConfig struct {
 	RedirectURL        string
 	APIBaseURL         string
 	TokenEncryptionKey string
+	KMSKeyID           string
+	KMSRegion          string
+	WebhookVerifier    string
 }
 
 type EmailConfig struct {
@@ -67,20 +72,22 @@ func (c EmailConfig) Configured() bool {
 }
 
 func (c QuickBooksConfig) Configured() bool {
-	return c.ClientID != "" && c.ClientSecret != "" && c.TokenEncryptionKey != ""
+	return c.ClientID != "" && c.ClientSecret != "" && (c.TokenEncryptionKey != "" || c.KMSKeyID != "")
 }
 
 func Load() Config {
 	return Config{
-		Environment:          strings.ToLower(getEnv("APP_ENV", "development")),
-		Port:                 getEnv("PORT", "8080"),
-		DatabaseURL:          getEnv("DATABASE_URL", "postgres:///ledgerops?host=/var/run/postgresql"),
-		MigrationDatabaseURL: os.Getenv("MIGRATION_DATABASE_URL"),
-		AllowedOrigin:        getEnv("ALLOWED_ORIGIN", "http://localhost:5173"),
-		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:5173"),
-		SeedDemo:             getBool("SEED_DEMO", false),
-		WorkerPollInterval:   getDuration("WORKER_POLL_INTERVAL", 2*time.Second),
-		ReminderPollInterval: getDuration("REMINDER_POLL_INTERVAL", time.Minute),
+		Environment:                    strings.ToLower(getEnv("APP_ENV", "development")),
+		Port:                           getEnv("PORT", "8080"),
+		DatabaseURL:                    getEnv("DATABASE_URL", "postgres:///ledgerops?host=/var/run/postgresql"),
+		MigrationDatabaseURL:           os.Getenv("MIGRATION_DATABASE_URL"),
+		AllowedOrigin:                  getEnv("ALLOWED_ORIGIN", "http://localhost:5173"),
+		FrontendURL:                    getEnv("FRONTEND_URL", "http://localhost:5173"),
+		SeedDemo:                       getBool("SEED_DEMO", false),
+		WorkerPollInterval:             getDuration("WORKER_POLL_INTERVAL", 2*time.Second),
+		ReminderPollInterval:           getDuration("REMINDER_POLL_INTERVAL", time.Minute),
+		QuickBooksSchedulePollInterval: getDuration("QUICKBOOKS_SCHEDULE_POLL_INTERVAL", time.Minute),
+		QuickBooksOutboxPollInterval:   getDuration("QUICKBOOKS_OUTBOX_POLL_INTERVAL", 2*time.Second),
 		Auth: AuthConfig{
 			SessionTTL:     getDuration("AUTH_SESSION_TTL", 12*time.Hour),
 			SessionIdleTTL: getDuration("AUTH_SESSION_IDLE_TTL", 30*time.Minute),
@@ -101,6 +108,9 @@ func Load() Config {
 			RedirectURL:        getEnv("QUICKBOOKS_REDIRECT_URL", "http://localhost:8080/api/v1/integrations/quickbooks/callback"),
 			APIBaseURL:         getEnv("QUICKBOOKS_API_BASE_URL", "https://sandbox-quickbooks.api.intuit.com"),
 			TokenEncryptionKey: os.Getenv("QUICKBOOKS_TOKEN_ENCRYPTION_KEY"),
+			KMSKeyID:           os.Getenv("QUICKBOOKS_KMS_KEY_ID"),
+			KMSRegion:          os.Getenv("QUICKBOOKS_KMS_REGION"),
+			WebhookVerifier:    os.Getenv("QUICKBOOKS_WEBHOOK_VERIFIER"),
 		},
 		Email: EmailConfig{
 			SMTPHost:             os.Getenv("SMTP_HOST"),
@@ -127,21 +137,27 @@ func (c Config) Validate() error {
 	if c.RateLimit.Requests <= 0 || c.RateLimit.Window <= 0 || c.RateLimit.LoginRequests <= 0 || c.RateLimit.LoginWindow <= 0 || c.RateLimit.SensitiveRequests <= 0 || c.RateLimit.SensitiveWindow <= 0 {
 		problems = append(problems, fmt.Errorf("rate-limit values must be positive"))
 	}
+	if c.WorkerPollInterval <= 0 || c.ReminderPollInterval <= 0 || c.QuickBooksSchedulePollInterval <= 0 || c.QuickBooksOutboxPollInterval <= 0 {
+		problems = append(problems, fmt.Errorf("worker polling intervals must be positive"))
+	}
 	for name, value := range map[string]string{"ALLOWED_ORIGIN": c.AllowedOrigin, "FRONTEND_URL": c.FrontendURL} {
 		parsed, err := url.Parse(value)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || strings.Contains(value, "*") {
 			problems = append(problems, fmt.Errorf("%s must be an origin URL without credentials, path, query, or fragment", name))
 		}
 	}
-	quickBooksValues := []string{c.QuickBooks.ClientID, c.QuickBooks.ClientSecret, c.QuickBooks.TokenEncryptionKey}
-	configuredQuickBooksValues := 0
-	for _, value := range quickBooksValues {
-		if value != "" {
-			configuredQuickBooksValues++
-		}
+	credentialsConfigured := c.QuickBooks.ClientID != "" || c.QuickBooks.ClientSecret != ""
+	if credentialsConfigured && (c.QuickBooks.ClientID == "" || c.QuickBooks.ClientSecret == "") {
+		problems = append(problems, fmt.Errorf("QuickBooks client ID and secret must be configured together"))
 	}
-	if configuredQuickBooksValues != 0 && configuredQuickBooksValues != len(quickBooksValues) {
-		problems = append(problems, fmt.Errorf("QuickBooks client ID, secret, and token encryption key must be configured together"))
+	if credentialsConfigured && c.QuickBooks.TokenEncryptionKey == "" && c.QuickBooks.KMSKeyID == "" {
+		problems = append(problems, fmt.Errorf("QuickBooks requires QUICKBOOKS_KMS_KEY_ID or QUICKBOOKS_TOKEN_ENCRYPTION_KEY"))
+	}
+	if c.QuickBooks.TokenEncryptionKey != "" && c.QuickBooks.KMSKeyID != "" {
+		problems = append(problems, fmt.Errorf("configure only one QuickBooks token encryption provider"))
+	}
+	if c.QuickBooks.KMSKeyID != "" && c.QuickBooks.KMSRegion == "" {
+		problems = append(problems, fmt.Errorf("QUICKBOOKS_KMS_REGION is required with QUICKBOOKS_KMS_KEY_ID"))
 	}
 	if (c.Email.SMTPUsername == "") != (c.Email.SMTPPassword == "") {
 		problems = append(problems, fmt.Errorf("SMTP username and password must be configured together"))
@@ -182,6 +198,12 @@ func (c Config) Validate() error {
 				if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" {
 					problems = append(problems, fmt.Errorf("%s must use HTTPS in production", name))
 				}
+			}
+			if c.QuickBooks.KMSKeyID == "" || c.QuickBooks.KMSRegion == "" {
+				problems = append(problems, fmt.Errorf("QUICKBOOKS_KMS_KEY_ID and QUICKBOOKS_KMS_REGION are required in production"))
+			}
+			if len(c.QuickBooks.WebhookVerifier) < 20 {
+				problems = append(problems, fmt.Errorf("QUICKBOOKS_WEBHOOK_VERIFIER is required in production"))
 			}
 		}
 		if c.Email.Configured() && !c.Email.RequireTLS {

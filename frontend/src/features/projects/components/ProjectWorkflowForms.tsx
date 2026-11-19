@@ -1,8 +1,9 @@
 import type { FieldValues, UseFormReturn } from 'react-hook-form'
+import { BadgeCheck, FilePlus2 } from 'lucide-react'
 import { formatMoney } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/Button'
 import { Input, Textarea } from '@/shared/ui/FormControls'
-import { Modal } from '@/shared/ui/Modal'
+import { SlideOver } from '@/shared/ui/SlideOver'
 import type { ChangeOrderFormValues, DecisionFormValues, InvoiceMilestoneFormValues, MilestoneFormValues } from '@/features/projects/schema'
 import type { BillingMilestone } from '@/features/projects/types'
 
@@ -35,21 +36,23 @@ export function MilestoneForm({ form, pending, error, onCancel, onSubmit }: Form
 }
 
 export function DecisionDialog({ label, form, open, pending, error, onClose, onDecision }: { label: string; form: UseFormReturn<DecisionFormValues>; open: boolean; pending: boolean; error: Error | null; onClose: () => void; onDecision: (decision: 'approved' | 'rejected', values: DecisionFormValues) => void }) {
-  return <Modal open={open} title={`Review ${label}`} onClose={onClose}>
-    <p>Approval is final and creates an immutable financial record.</p>
-    <Textarea label="Review note" rows={4} error={form.formState.errors.note?.message} {...form.register('note')} />
-    {error ? <p className="form-error">{error.message}</p> : null}
-    <div className="invoice-dialog-actions"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="secondary" disabled={pending} onClick={() => void form.handleSubmit((values) => onDecision('rejected', values))()}>Reject</Button><Button disabled={pending} onClick={() => void form.handleSubmit((values) => onDecision('approved', values))()}>Approve</Button></div>
-  </Modal>
+  return <SlideOver open={open} eyebrow="Contract control" title={`Review ${label}`} icon={<BadgeCheck size={18} />} closeLabel={`Close review for ${label}`} panelClassName="workflow-slide-panel" onClose={onClose}>
+    <div className="workflow-slide-content">
+      <p>Approval is final and creates an immutable financial record.</p>
+      <Textarea label="Review note" rows={4} error={form.formState.errors.note?.message} {...form.register('note')} />
+      {error ? <p className="form-error">{error.message}</p> : null}
+      <div className="invoice-dialog-actions"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="secondary" disabled={pending} onClick={() => void form.handleSubmit((values) => onDecision('rejected', values))()}>Reject</Button><Button disabled={pending} onClick={() => void form.handleSubmit((values) => onDecision('approved', values))()}>Approve</Button></div>
+    </div>
+  </SlideOver>
 }
 
 export function MilestoneInvoiceDialog({ target, currencyCode, form, pending, error, onClose, onSubmit }: { target: BillingMilestone | null; currencyCode?: string; form: UseFormReturn<InvoiceMilestoneFormValues>; pending: boolean; error: Error | null; onClose: () => void; onSubmit: (values: InvoiceMilestoneFormValues) => void }) {
-  return <Modal open={Boolean(target)} title={`Invoice ${target?.name ?? ''}`} onClose={onClose}>
-    <p>The invoice amount is fixed at {target && currencyCode ? formatMoney(target.amountMinor, currencyCode) : ''}.</p>
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+  return <SlideOver open={Boolean(target)} eyebrow="Milestone billing" title={`Invoice ${target?.name ?? ''}`} icon={<FilePlus2 size={18} />} closeLabel="Close milestone invoice form" panelClassName="workflow-slide-panel" onClose={onClose}>
+    <form className="workflow-slide-content" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+      <p>The invoice amount is fixed at {target && currencyCode ? formatMoney(target.amountMinor, currencyCode) : ''}.</p>
       <div className="project-invoice-grid"><Input label="Invoice number" error={form.formState.errors.invoiceNumber?.message} {...form.register('invoiceNumber')} /><Input label="Issue date" type="date" error={form.formState.errors.issuedOn?.message} {...form.register('issuedOn')} /><Input label="Due date" type="date" error={form.formState.errors.dueOn?.message} {...form.register('dueOn')} /></div>
       {error ? <p className="form-error">{error.message}</p> : null}
       <div className="invoice-dialog-actions"><Button type="button" variant="ghost" onClick={onClose}>Cancel</Button><Button type="submit" disabled={pending}>Create invoice</Button></div>
     </form>
-  </Modal>
+  </SlideOver>
 }

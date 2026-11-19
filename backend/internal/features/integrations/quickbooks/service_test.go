@@ -45,8 +45,11 @@ func (r *fakeRepository) DeleteConnection(context.Context, string) error {
 	r.connection = nil
 	return nil
 }
+func (r *fakeRepository) Operations(context.Context, string) (OperationalStatus, error) {
+	return OperationalStatus{}, nil
+}
 
-type fakeClient struct{}
+type fakeClient struct{ revoked string }
 
 func (fakeClient) AuthorizationURL(state string) string {
 	return "https://example.test/authorize?state=" + state
@@ -63,6 +66,7 @@ func (fakeClient) ExchangeCode(context.Context, string) (Tokens, error) {
 func (fakeClient) CompanyName(context.Context, string, string) (string, error) {
 	return "Sandbox Co", nil
 }
+func (c fakeClient) RevokeToken(context.Context, string) error { return nil }
 
 type prefixCipher struct{}
 

@@ -10,7 +10,8 @@ func validTestConfig() Config {
 	return Config{
 		Environment: "test", DatabaseURL: "postgres:///ledgerops", AllowedOrigin: "http://localhost:5173",
 		FrontendURL: "http://localhost:5173", Auth: AuthConfig{SessionTTL: 12 * time.Hour, SessionIdleTTL: 30 * time.Minute},
-		RateLimit: RateLimitConfig{Requests: 100, Window: time.Minute, LoginRequests: 5, LoginWindow: time.Minute, SensitiveRequests: 10, SensitiveWindow: time.Minute},
+		RateLimit:          RateLimitConfig{Requests: 100, Window: time.Minute, LoginRequests: 5, LoginWindow: time.Minute, SensitiveRequests: 10, SensitiveWindow: time.Minute},
+		WorkerPollInterval: time.Second, ReminderPollInterval: time.Minute, QuickBooksSchedulePollInterval: time.Minute, QuickBooksOutboxPollInterval: time.Second,
 	}
 }
 

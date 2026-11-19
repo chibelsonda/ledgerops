@@ -44,7 +44,7 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID, scenarioID
 	}
 	result.CurrencyCode = organization.CurrencyCode
 	var opening struct{ OpeningCashMinor int64 }
-	if err := r.db.WithContext(ctx).Raw(`SELECT ((SELECT COALESCE(SUM(paid_minor),0)::bigint FROM invoice_balances WHERE organization_id=?)-(SELECT COALESCE(SUM(amount_minor),0)::bigint FROM expenses WHERE organization_id=?))::bigint AS opening_cash_minor`, organizationID, organizationID).Scan(&opening).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(`SELECT ((SELECT COALESCE(SUM(paid_minor),0)::bigint FROM invoice_balances WHERE organization_id=?)-(SELECT COALESCE(SUM(amount_minor),0)::bigint FROM expenses WHERE organization_id=? AND source_deleted_at IS NULL))::bigint AS opening_cash_minor`, organizationID, organizationID).Scan(&opening).Error; err != nil {
 		return result, fmt.Errorf("calculate opening cash: %w", err)
 	}
 	result.OpeningCashMinor = opening.OpeningCashMinor
@@ -69,7 +69,7 @@ func (r *PostgresRepository) Get(ctx context.Context, organizationID, scenarioID
 	}
 
 	var expenseRunRate struct{ Total int64 }
-	if err := r.db.WithContext(ctx).Raw(`SELECT COALESCE(SUM(amount_minor),0)::bigint AS total FROM expenses WHERE organization_id=? AND incurred_on>=CURRENT_DATE-91`, organizationID).Scan(&expenseRunRate).Error; err != nil {
+	if err := r.db.WithContext(ctx).Raw(`SELECT COALESCE(SUM(amount_minor),0)::bigint AS total FROM expenses WHERE organization_id=? AND source_deleted_at IS NULL AND incurred_on>=CURRENT_DATE-91`, organizationID).Scan(&expenseRunRate).Error; err != nil {
 		return result, fmt.Errorf("load operating run-rate: %w", err)
 	}
 	weeklyOperating := expenseRunRate.Total / 13 * int64(10000+result.Scenario.ExpenseGrowthBPS) / 10000

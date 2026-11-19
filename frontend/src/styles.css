@@ -3,7 +3,6 @@
 
 @theme {
   --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Newsreader Variable", ui-serif, Georgia, serif;
   --color-ink: #18251f;
   --color-muted: #525e57;
   --color-brand: #1f7550;
@@ -85,7 +84,7 @@
   .metric-card { @apply rounded-lg border border-line bg-paper p-5 shadow-[0_7px_26px_rgba(38,47,40,.035)]; }
   .metric-top { @apply flex items-center justify-between text-xs text-muted; }
   .metric-top svg { @apply text-brand; }
-  .metric-card > strong { @apply my-3.5 block font-display text-[27px] font-normal tracking-tight; }
+  .metric-card > strong { @apply my-3.5 block text-[27px] tracking-tight tabular-nums; }
   .metric-card small { @apply text-[11px] text-muted; }
   .metric-warning { @apply bg-amber-50; }
   .metric-warning .metric-top svg { @apply text-accent; }
@@ -103,7 +102,7 @@
   .dot.expense { @apply bg-accent; }
   .chart-wrap { @apply mt-5 h-[290px]; }
   .aging-total { @apply mb-2 mt-7; }
-  .aging-total strong { @apply block font-display text-3xl font-normal; }
+  .aging-total strong { @apply block text-3xl tracking-tight tabular-nums; }
   .aging-total span { @apply text-[11px] text-muted; }
   .aging-chart { @apply -ml-2.5 h-[220px]; }
   .period-chip { @apply rounded-lg bg-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-muted; }
@@ -231,7 +230,7 @@
   .project-overview-grid { @apply mb-[15px] grid grid-cols-4 gap-[13px]; }
   .project-overview-grid > div { @apply flex flex-col gap-2 p-5; }
   .project-overview-grid span { @apply text-xs text-muted; }
-  .project-overview-grid strong { @apply font-display text-2xl font-normal; }
+  .project-overview-grid strong { @apply text-2xl tracking-tight tabular-nums; }
   .project-create-panel { @apply max-w-[760px]; }
   .project-policy-note { @apply rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs leading-relaxed text-brand; }
   .project-detail-panel { @apply max-w-[920px]; }
@@ -265,6 +264,10 @@
   .project-audit-row span:last-child { @apply text-[10px] text-muted; }
   .project-invoice-grid { @apply grid grid-cols-2 gap-4; }
   .project-invoice-grid > :first-child { @apply col-span-full; }
+
+  .workflow-slide-panel { @apply max-w-[640px]; }
+  .workflow-slide-content { @apply p-6; }
+  .workflow-slide-content > p { @apply mb-5 mt-0 text-xs leading-relaxed text-muted; }
 
   .close-layout { @apply grid grid-cols-[300px_minmax(0,1fr)] items-start gap-[15px]; }
   .close-period-list { @apply sticky top-6 overflow-hidden; }
@@ -305,7 +308,7 @@
   .close-audit { @apply pb-0; }
   .close-modal-title { @apply mb-5 flex items-center justify-between gap-4; }
   .close-modal-title button { @apply size-8 p-0; }
-  .close-dialog-form { @apply flex flex-col gap-4; }
+  .close-dialog-form { @apply flex flex-col gap-4 p-6; }
   .close-dialog-form > p { @apply m-0 text-xs leading-relaxed text-muted; }
 
   .forecast-toolbar { @apply mb-[15px] flex items-end justify-between gap-6 p-5; }
@@ -330,7 +333,7 @@
   .forecast-adjustment > div { @apply flex flex-col gap-1; }
   .forecast-adjustment strong { @apply text-xs; }
   .forecast-adjustment small { @apply text-[10px] text-muted; }
-  .forecast-dialog-form { @apply grid grid-cols-2 gap-4; }
+  .forecast-dialog-form { @apply grid grid-cols-2 gap-4 p-6; }
   .forecast-dialog-form > :first-child, .forecast-dialog-form > .invoice-dialog-actions { @apply col-span-full; }
 
   .review-layout { @apply grid grid-cols-[minmax(0,1.45fr)_minmax(310px,.75fr)] items-start gap-[15px]; }
@@ -460,7 +463,7 @@
   .table-pagination { @apply flex-wrap justify-start; }
   .page-size { @apply w-full; }
   .slide-over-panel { @apply max-w-full; }
-  .slide-over-heading, .invoice-form, .payment-panel, .adjustment-panel, .invoice-audit { @apply px-4; }
+  .slide-over-heading, .invoice-form, .payment-panel, .adjustment-panel, .invoice-audit, .workflow-slide-content, .close-dialog-form, .forecast-dialog-form { @apply px-4; }
   .invoice-form-grid { @apply grid-cols-1; }
   .client-form-grid { @apply grid-cols-1; }
   .contact-panel { @apply px-4; }

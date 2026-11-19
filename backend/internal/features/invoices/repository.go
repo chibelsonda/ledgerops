@@ -24,7 +24,7 @@ func (r *PostgresRepository) List(ctx context.Context, organizationID string, pa
 		Table("invoices i").
 		Joins("JOIN clients c ON c.id = i.client_id").
 		Joins("JOIN invoice_balances b ON b.invoice_id = i.id AND b.organization_id = i.organization_id").
-		Where("i.organization_id = ?", organizationID)
+		Where("i.organization_id = ? AND i.source_deleted_at IS NULL", organizationID)
 	if params.Query != "" {
 		like := "%" + params.Query + "%"
 		filters = filters.Where("i.invoice_number ILIKE ? OR c.name ILIKE ?", like, like)
@@ -70,7 +70,7 @@ func (r *PostgresRepository) ListClients(ctx context.Context, organizationID str
 	if err := r.db.WithContext(ctx).Raw(`
 		SELECT id::text AS id, name
 		FROM clients
-		WHERE organization_id = ?
+		WHERE organization_id = ? AND source_deleted_at IS NULL
 		ORDER BY name`, organizationID).Scan(&clients).Error; err != nil {
 		return nil, fmt.Errorf("list invoice clients: %w", err)
 	}
@@ -100,6 +100,9 @@ func (r *PostgresRepository) Create(ctx context.Context, organizationID, actor s
 			return fmt.Errorf("insert invoice: %w", result.Error)
 		}
 		invoiceID = row.ID
+		if err := enqueueQuickBooksWrite(tx, organizationID, "invoice", invoiceID, "create"); err != nil {
+			return err
+		}
 		metadata := map[string]any{
 			"invoiceNumber": input.InvoiceNumber,
 			"status":        input.Status,
@@ -176,6 +179,11 @@ func (r *PostgresRepository) Update(ctx context.Context, organizationID, invoice
 				return apperrors.ErrConflict
 			}
 			return fmt.Errorf("update invoice: %w", result.Error)
+		}
+		if before.Source == "manual" {
+			if err := enqueueQuickBooksWrite(tx, organizationID, "invoice", invoiceID, "update"); err != nil {
+				return err
+			}
 		}
 
 		changes := changedFields(before, input)
@@ -307,6 +315,9 @@ func (r *PostgresRepository) RecordPayment(ctx context.Context, organizationID, 
 			return fmt.Errorf("insert invoice payment: %w", err)
 		}
 		paymentID = row.ID
+		if err := enqueueQuickBooksWrite(tx, organizationID, "payment", paymentID, "create"); err != nil {
+			return err
+		}
 
 		if err := tx.Table("invoices").Where("id = ? AND organization_id = ?", invoiceID, organizationID).Updates(map[string]any{
 			"status":     newStatus,
@@ -415,6 +426,18 @@ func ensureClient(tx *gorm.DB, organizationID, clientID string) error {
 
 func insertAuditEvent(tx *gorm.DB, organizationID, actor, action, entityID string, metadata map[string]any) error {
 	return audit.Write(tx, organizationID, actor, action, "invoice", entityID, metadata)
+}
+
+func enqueueQuickBooksWrite(tx *gorm.DB, organizationID, aggregateType, aggregateID, operation string) error {
+	if err := tx.Exec(`INSERT INTO quickbooks_outbox (organization_id, aggregate_type, aggregate_id, operation, idempotency_key)
+		SELECT ?, ?, ?::uuid, ?, concat(?::text, ':', ?::text, ':', ?::uuid::text, ':', txid_current()::text)
+		WHERE EXISTS (SELECT 1 FROM quickbooks_connections WHERE organization_id = ?)
+		AND (? <> 'invoice' OR EXISTS (SELECT 1 FROM invoices WHERE id = ? AND (external_id IS NULL OR external_id LIKE 'quickbooks:invoice:%')))`,
+		organizationID, aggregateType, aggregateID, operation, organizationID, operation, aggregateID, organizationID,
+		aggregateType, aggregateID).Error; err != nil {
+		return fmt.Errorf("enqueue QuickBooks %s %s: %w", aggregateType, operation, err)
+	}
+	return nil
 }
 
 func changedFields(before struct {

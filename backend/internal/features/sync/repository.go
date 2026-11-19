@@ -29,12 +29,41 @@ func (r *PostgresRepository) ListRuns(ctx context.Context, organizationID string
 	if err != nil {
 		return nil, fmt.Errorf("list sync runs: %w", err)
 	}
+	if len(runs) == 0 {
+		return runs, nil
+	}
+	runIDs := make([]string, 0, len(runs))
+	byID := make(map[string]*Run, len(runs))
+	for index := range runs {
+		runs[index].Entities = make([]EntityProgress, 0)
+		runIDs = append(runIDs, runs[index].ID)
+		byID[runs[index].ID] = &runs[index]
+	}
+	var rows []struct {
+		SyncRunID string
+		EntityProgress
+	}
+	if err := r.db.WithContext(ctx).Table("sync_run_entities").
+		Select("sync_run_id::text AS sync_run_id, entity_type, status, records_processed, error_message").
+		Where("sync_run_id IN ?", runIDs).Order("entity_type").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list sync entity progress: %w", err)
+	}
+	for _, row := range rows {
+		if run := byID[row.SyncRunID]; run != nil {
+			run.Entities = append(run.Entities, row.EntityProgress)
+		}
+	}
 	return runs, nil
 }
 
 func (r *PostgresRepository) Enqueue(ctx context.Context, organizationID string) (Run, error) {
 	var run Run
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var lockAcquired int
+		if err := tx.Raw(`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(?, 0))`,
+			"quickbooks-sync:"+organizationID).Scan(&lockAcquired).Error; err != nil {
+			return fmt.Errorf("lock QuickBooks sync enqueue: %w", err)
+		}
 		var connected bool
 		if err := tx.Raw(`
 			SELECT EXISTS(
@@ -44,6 +73,19 @@ func (r *PostgresRepository) Enqueue(ctx context.Context, organizationID string)
 		}
 		if !connected {
 			return ErrProviderNotConnected
+		}
+		active := tx.Raw(`
+			SELECT id::text AS id, provider, status, records_processed, error_message,
+				to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS created_at,
+				CASE WHEN finished_at IS NULL THEN NULL ELSE to_char(finished_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') END AS finished_at
+			FROM sync_runs
+			WHERE organization_id = ? AND provider = 'quickbooks-sandbox' AND status IN ('queued', 'running')
+			ORDER BY created_at DESC LIMIT 1`, organizationID).Scan(&run)
+		if active.Error != nil {
+			return fmt.Errorf("find active QuickBooks sync: %w", active.Error)
+		}
+		if active.RowsAffected > 0 && run.ID != "" {
+			return nil
 		}
 		if err := tx.Raw(`
 			INSERT INTO sync_runs (organization_id, provider, status) VALUES (?, 'quickbooks-sandbox', 'queued')
@@ -67,6 +109,53 @@ func (r *PostgresRepository) Enqueue(ctx context.Context, organizationID string)
 		return Run{}, fmt.Errorf("commit sync: %w", err)
 	}
 	return run, nil
+}
+
+func (r *PostgresRepository) EnqueueDue(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	enqueued := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var schedules []struct {
+			OrganizationID  string
+			IntervalMinutes int
+		}
+		if err := tx.Raw(`
+			SELECT organization_id::text AS organization_id, interval_minutes
+			FROM quickbooks_sync_schedules
+			WHERE enabled AND next_run_at <= now()
+			ORDER BY next_run_at FOR UPDATE SKIP LOCKED LIMIT ?`, limit).Scan(&schedules).Error; err != nil {
+			return fmt.Errorf("claim due QuickBooks schedules: %w", err)
+		}
+		for _, schedule := range schedules {
+			var active bool
+			if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM sync_runs WHERE organization_id = ?
+				AND provider = 'quickbooks-sandbox' AND status IN ('queued', 'running'))`, schedule.OrganizationID).Scan(&active).Error; err != nil {
+				return fmt.Errorf("check active scheduled sync: %w", err)
+			}
+			if !active {
+				var runID string
+				if err := tx.Raw(`INSERT INTO sync_runs (organization_id, provider, status)
+					VALUES (?, 'quickbooks-sandbox', 'queued') RETURNING id::text`, schedule.OrganizationID).Scan(&runID).Error; err != nil {
+					return fmt.Errorf("create scheduled sync run: %w", err)
+				}
+				if err := tx.Exec(`INSERT INTO sync_jobs (organization_id, sync_run_id, provider, idempotency_key)
+					VALUES (?, ?, 'quickbooks-sandbox', ?)`, schedule.OrganizationID, runID,
+					schedule.OrganizationID+":"+runID).Error; err != nil {
+					return fmt.Errorf("enqueue scheduled sync job: %w", err)
+				}
+				enqueued++
+			}
+			if err := tx.Exec(`UPDATE quickbooks_sync_schedules SET last_enqueued_at = now(),
+				next_run_at = now() + make_interval(mins => interval_minutes), updated_at = now()
+				WHERE organization_id = ?`, schedule.OrganizationID).Error; err != nil {
+				return fmt.Errorf("advance QuickBooks schedule: %w", err)
+			}
+		}
+		return nil
+	})
+	return enqueued, err
 }
 
 func (r *PostgresRepository) ClaimJob(ctx context.Context) (*Job, error) {
@@ -105,18 +194,8 @@ func (r *PostgresRepository) ClaimJob(ctx context.Context) (*Job, error) {
 	return &job, nil
 }
 
-func (r *PostgresRepository) CompleteJob(ctx context.Context, job Job) error {
+func (r *PostgresRepository) CompleteJob(ctx context.Context, job Job, recordsProcessed int) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var records int
-		if err := tx.Raw(`
-			SELECT (SELECT COUNT(*) FROM clients WHERE organization_id = ?)
-				 + (SELECT COUNT(*) FROM invoices WHERE organization_id = ?)
-				 + (SELECT COUNT(*) FROM payments WHERE organization_id = ?)
-				 + (SELECT COUNT(*) FROM expenses WHERE organization_id = ?)`,
-			job.OrganizationID, job.OrganizationID, job.OrganizationID, job.OrganizationID,
-		).Scan(&records).Error; err != nil {
-			return fmt.Errorf("count synchronized records: %w", err)
-		}
 		if err := tx.Table("sync_jobs").Where("id = ?", job.ID).Updates(map[string]any{
 			"status":     "succeeded",
 			"locked_at":  nil,
@@ -126,7 +205,8 @@ func (r *PostgresRepository) CompleteJob(ctx context.Context, job Job) error {
 		}
 		if err := tx.Table("sync_runs").Where("id = ?", job.SyncRunID).Updates(map[string]any{
 			"status":            "succeeded",
-			"records_processed": records,
+			"records_processed": recordsProcessed,
+			"error_message":     nil,
 			"finished_at":       gorm.Expr("now()"),
 		}).Error; err != nil {
 			return fmt.Errorf("complete sync run: %w", err)
@@ -135,19 +215,26 @@ func (r *PostgresRepository) CompleteJob(ctx context.Context, job Job) error {
 	})
 }
 
-func (r *PostgresRepository) FailJob(ctx context.Context, job Job, cause error) error {
-	backoff := time.Duration(job.Attempts*job.Attempts) * time.Minute
+func (r *PostgresRepository) FailJob(ctx context.Context, job Job, cause error, retryable bool, retryAfter time.Duration) error {
+	backoff := retryAfter
+	if backoff <= 0 {
+		backoff = time.Duration(job.Attempts*job.Attempts) * time.Minute
+	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Exec(`
-			UPDATE sync_jobs SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+			UPDATE sync_jobs SET status = CASE WHEN ? AND attempts < max_attempts THEN 'queued' ELSE 'failed' END,
 				last_error = ?, locked_at = NULL, next_attempt_at = now() + ?::interval, updated_at = now()
-			WHERE id = ?`, cause.Error(), backoff.String(), job.ID).Error; err != nil {
+			WHERE id = ?`, retryable, cause.Error(), backoff.String(), job.ID).Error; err != nil {
 			return fmt.Errorf("fail sync job: %w", err)
 		}
 		if err := tx.Exec(`
-			UPDATE sync_runs SET status = CASE WHEN ? >= 5 THEN 'failed' ELSE 'queued' END,
-				error_message = ?, finished_at = CASE WHEN ? >= 5 THEN now() ELSE NULL END WHERE id = ?`,
-			job.Attempts, cause.Error(), job.Attempts, job.SyncRunID,
+			UPDATE sync_runs SET status = CASE
+					WHEN ? AND EXISTS (SELECT 1 FROM sync_jobs WHERE id = ? AND status = 'queued') THEN 'queued'
+					ELSE 'failed' END,
+				error_message = ?, finished_at = CASE
+					WHEN ? AND EXISTS (SELECT 1 FROM sync_jobs WHERE id = ? AND status = 'queued') THEN NULL
+					ELSE now() END
+			WHERE id = ?`, retryable, job.ID, cause.Error(), retryable, job.ID, job.SyncRunID,
 		).Error; err != nil {
 			return fmt.Errorf("fail sync run: %w", err)
 		}

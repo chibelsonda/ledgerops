@@ -64,7 +64,8 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	reconciliationRepository := reconciliation.NewPostgresRepository(db)
 	reconciliationHandler := reconciliation.NewHandler(reconciliation.NewService(reconciliationRepository), logger)
 	syncRepository := sync.NewPostgresRepository(db)
-	syncHandler := sync.NewHandler(sync.NewService(syncRepository), logger)
+	syncService := sync.NewService(syncRepository)
+	syncHandler := sync.NewHandler(syncService, logger)
 	clientsRepository := clients.NewPostgresRepository(db)
 	clientsHandler := clients.NewHandler(clients.NewService(clientsRepository), logger)
 	closeRepository := closefeature.NewPostgresRepository(db)
@@ -85,7 +86,7 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	var tokenCipher quickbooks.Cipher
 	quickBooksConfigured := cfg.QuickBooks.Configured()
 	if quickBooksConfigured {
-		cipher, err := quickbooks.NewAESGCMCipher(cfg.QuickBooks.TokenEncryptionKey)
+		cipher, err := quickbooks.NewTokenCipher(context.Background(), cfg.QuickBooks.TokenEncryptionKey, cfg.QuickBooks.KMSKeyID, cfg.QuickBooks.KMSRegion)
 		if err != nil {
 			return nil, fmt.Errorf("configure QuickBooks integration: %w", err)
 		}
@@ -99,6 +100,7 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	}
 	quickBooksService := quickbooks.NewService(quickBooksRepository, quickBooksClient, tokenCipher, quickBooksConfigured)
 	quickBooksHandler := quickbooks.NewHandler(quickBooksService, logger, cfg.FrontendURL)
+	quickBooksWebhookHandler := quickbooks.NewWebhookHandler(quickBooksRepository, syncService, cfg.QuickBooks.WebhookVerifier, logger)
 
 	mux.HandleFunc("GET /healthz", httpx.HealthHandler(func(ctx context.Context) error {
 		sqlDB, err := db.DB()
@@ -113,6 +115,7 @@ func NewRouter(db *gorm.DB, logger *slog.Logger, cfg config.Config) (http.Handle
 	mux.Handle("POST /api/v1/auth/password-reset/confirm", loginLimiter.Middleware(http.HandlerFunc(authHandler.ResetPassword), clientIP.Key))
 	mux.HandleFunc("GET /api/v1/auth/session", authHandler.Session)
 	mux.Handle("GET /api/v1/integrations/quickbooks/callback", sensitiveLimiter.Middleware(http.HandlerFunc(quickBooksHandler.Callback), clientIP.Key))
+	mux.Handle("POST /api/v1/integrations/quickbooks/webhook", sensitiveLimiter.Middleware(http.HandlerFunc(quickBooksWebhookHandler.Receive), clientIP.Key))
 	mux.Handle("POST /api/v1/integrations/email/webhook", sensitiveLimiter.Middleware(http.HandlerFunc(remindersHandler.DeliveryWebhook), clientIP.Key))
 
 	registerProtectedRoutes(protectedMux, logger, routeHandlers{

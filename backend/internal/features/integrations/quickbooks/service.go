@@ -49,6 +49,11 @@ func (s *Service) Status(ctx context.Context, organizationID string) (Connection
 	if connection == nil {
 		return status, nil
 	}
+	operations, err := s.repository.Operations(ctx, organizationID)
+	if err != nil {
+		return ConnectionStatus{}, err
+	}
+	status.Operations = operations
 	status.Connected = true
 	status.CompanyName = connection.CompanyName
 	status.RealmID = connection.RealmID
@@ -115,5 +120,22 @@ func (s *Service) CompleteAuthorization(ctx context.Context, state, code, realmI
 }
 
 func (s *Service) Disconnect(ctx context.Context, organizationID string) error {
+	if !s.configured || s.client == nil || s.cipher == nil {
+		return ErrNotConfigured
+	}
+	connection, err := s.repository.FindConnection(ctx, organizationID)
+	if err != nil {
+		return err
+	}
+	if connection == nil {
+		return nil
+	}
+	refreshToken, err := s.cipher.Decrypt(connection.RefreshToken)
+	if err != nil {
+		return fmt.Errorf("decrypt QuickBooks refresh token: %w", err)
+	}
+	if err := s.client.RevokeToken(ctx, refreshToken); err != nil {
+		return fmt.Errorf("revoke QuickBooks authorization: %w", err)
+	}
 	return s.repository.DeleteConnection(ctx, organizationID)
 }

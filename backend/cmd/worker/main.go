@@ -10,6 +10,7 @@ import (
 
 	"github.com/portfolio/ledgerops/backend/internal/config"
 	"github.com/portfolio/ledgerops/backend/internal/database"
+	"github.com/portfolio/ledgerops/backend/internal/features/integrations/quickbooks"
 	"github.com/portfolio/ledgerops/backend/internal/features/reminders"
 	ledgersync "github.com/portfolio/ledgerops/backend/internal/features/sync"
 	"github.com/portfolio/ledgerops/backend/internal/jobs"
@@ -36,7 +37,29 @@ func main() {
 		}
 	}()
 
-	worker := jobs.NewWorker(ledgersync.NewPostgresRepository(db), logger, cfg.WorkerPollInterval)
+	processors := make(map[string]jobs.Processor)
+	if cfg.QuickBooks.Configured() {
+		cipher, err := quickbooks.NewTokenCipher(ctx, cfg.QuickBooks.TokenEncryptionKey, cfg.QuickBooks.KMSKeyID, cfg.QuickBooks.KMSRegion)
+		if err != nil {
+			logger.Error("configure QuickBooks token encryption", "error", err)
+			os.Exit(1)
+		}
+		quickBooksRepository := quickbooks.NewPostgresRepository(db)
+		quickBooksClient := quickbooks.NewIntuitClient(
+			cfg.QuickBooks.ClientID,
+			cfg.QuickBooks.ClientSecret,
+			cfg.QuickBooks.RedirectURL,
+			cfg.QuickBooks.APIBaseURL,
+		)
+		processors["quickbooks-sandbox"] = quickbooks.NewSyncService(quickBooksRepository, quickBooksClient, cipher)
+		outboxWorker := quickbooks.NewOutboxWorker(quickBooksRepository, quickBooksClient, cipher, logger, cfg.QuickBooksOutboxPollInterval)
+		go outboxWorker.Run(ctx)
+	} else {
+		logger.Info("QuickBooks synchronization disabled; credentials are not configured")
+	}
+	syncRepository := ledgersync.NewPostgresRepository(db)
+	worker := jobs.NewWorker(syncRepository, processors, logger, cfg.WorkerPollInterval)
+	quickBooksScheduler := ledgersync.NewScheduler(syncRepository, logger, cfg.QuickBooksSchedulePollInterval)
 	reminderService := reminders.NewService(reminders.NewPostgresRepository(db))
 	reminderScheduler := reminders.NewScheduler(reminderService, logger, cfg.ReminderPollInterval)
 	if cfg.Email.Configured() {
@@ -56,8 +79,11 @@ func main() {
 	} else {
 		logger.Info("email delivery disabled; reminders will remain queued")
 	}
-	logger.Info("worker started", "sync_poll_interval", cfg.WorkerPollInterval, "reminder_poll_interval", cfg.ReminderPollInterval)
+	logger.Info("worker started", "sync_poll_interval", cfg.WorkerPollInterval, "quickbooks_schedule_poll_interval", cfg.QuickBooksSchedulePollInterval, "reminder_poll_interval", cfg.ReminderPollInterval)
 	go worker.Run(ctx)
+	if cfg.QuickBooks.Configured() {
+		go quickBooksScheduler.Run(ctx)
+	}
 	reminderScheduler.Run(ctx)
 	time.Sleep(100 * time.Millisecond)
 }

@@ -1,6 +1,7 @@
 package quickbooks
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -9,6 +10,13 @@ import (
 	"fmt"
 	"io"
 )
+
+func NewTokenCipher(ctx context.Context, localKey, kmsKeyID, kmsRegion string) (Cipher, error) {
+	if kmsKeyID != "" {
+		return NewKMSCipher(ctx, kmsKeyID, kmsRegion)
+	}
+	return NewAESGCMCipher(localKey)
+}
 
 type AESGCMCipher struct {
 	aead cipher.AEAD

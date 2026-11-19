@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { Input, Select, Textarea } from './FormControls'
+import { Input, PasswordInput, Select, Textarea } from './FormControls'
 
 describe('validated form controls', () => {
   it('renders every invalid control with a red border', () => {
@@ -20,5 +20,17 @@ describe('validated form controls', () => {
       expect(control).toHaveStyle({ borderColor: '#dc2626' })
       expect(control).toHaveAttribute('aria-invalid', 'true')
     }
+  })
+
+  it('toggles password visibility with an accessible button', () => {
+    render(<PasswordInput label="Password" defaultValue="secure password" />)
+
+    const input = screen.getByLabelText('Password')
+    const toggle = screen.getByRole('button', { name: 'Show password' })
+    expect(input).toHaveAttribute('type', 'password')
+
+    fireEvent.click(toggle)
+    expect(input).toHaveAttribute('type', 'text')
+    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

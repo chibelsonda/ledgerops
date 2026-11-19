@@ -109,9 +109,9 @@ export function SyncPage() {
       {connectionError && <p className="integration-inline-error" role="alert">{connectionError.message}</p>}
 
       <section className="sync-principles">
-        <div><Database /><strong>Idempotent upserts</strong><span>External IDs prevent duplicate financial records.</span></div>
-        <div><CloudCog /><strong>Background processing</strong><span>PostgreSQL queue with locking, retries, and backoff.</span></div>
-        <div><ShieldCheck /><strong>Protected credentials</strong><span>One-time OAuth state and encrypted token storage.</span></div>
+        <div><Database /><strong>Idempotent upserts</strong><span>{source.operations?.pendingWebhooks ?? 0} webhook events awaiting CDC.</span></div>
+        <div><CloudCog /><strong>Background processing</strong><span>{source.operations?.queuedWrites ?? 0} outbound writes queued · hourly schedule {source.operations?.scheduleEnabled ? 'active' : 'inactive'}.</span></div>
+        <div><ShieldCheck /><strong>Protected credentials</strong><span>{source.operations?.failedWrites ?? 0} failed writes requiring attention.</span></div>
       </section>
       <section className="panel table-panel">
         <div className="panel-heading"><div><span className="eyebrow">Operations</span><h2>Recent sync runs</h2></div></div>
@@ -119,7 +119,7 @@ export function SyncPage() {
           <table>
             <thead><tr><th>Source</th><th>Started</th><th>Status</th><th className="numeric">Records</th><th>Result</th></tr></thead>
             <tbody>{history.map((run) => (
-              <tr key={run.id}><td><strong>{titleCase(run.provider)}</strong></td><td>{formatRelativeTime(run.createdAt)}</td><td><StatusBadge status={run.status} /></td><td className="numeric">{run.recordsProcessed}</td><td>{run.status === 'succeeded' ? <span className="success-copy"><CheckCircle2 size={15} /> Completed without errors</span> : run.errorMessage ?? 'Waiting for worker'}</td></tr>
+              <tr key={run.id}><td><strong>{titleCase(run.provider)}</strong></td><td>{formatRelativeTime(run.createdAt)}</td><td><StatusBadge status={run.status} /></td><td className="numeric">{run.recordsProcessed}</td><td>{run.entities?.length ? run.entities.map((entity) => `${entity.entityType} ${entity.recordsProcessed}`).join(' · ') : run.status === 'succeeded' ? <span className="success-copy"><CheckCircle2 size={15} /> Completed without errors</span> : run.errorMessage ?? 'Waiting for worker'}</td></tr>
             ))}</tbody>
           </table>
           {history.length === 0 && <div className="empty-table">No synchronization runs yet.</div>}

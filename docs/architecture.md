@@ -22,7 +22,7 @@ Go Handler → Service → Repository/GORM ────────► PostgreSQ
 - **Tenant identity is server-derived.** Opaque cookie sessions resolve a user, organization, and role; API clients cannot assert tenant identity through request headers.
 - **Mutations require CSRF proof.** A session-bound synchronizer token is returned in JSON and sent back through `X-CSRF-Token`.
 - **Public identifiers use UUIDv7.** API resources keep one opaque identifier while benefiting from time-ordered B-tree insertion locality. Internal queue and audit identifiers remain implementation details and can evolve independently.
-- **Sync work is asynchronous.** The API creates a run and an idempotent queue record. The worker claims jobs with `FOR UPDATE SKIP LOCKED`, records attempts, and applies retry backoff.
+- **Sync work is asynchronous.** The API creates a run and an idempotent queue record. The worker claims jobs with `FOR UPDATE SKIP LOCKED`, refreshes OAuth credentials when required, imports paginated entities in dependency order, records attempts, and applies classified retry backoff.
 - **Collection reminders use a transactional outbox.** The worker evaluates client policies and primary contacts, then idempotently queues one immutable reminder per overdue invoice. A separate SMTP adapter claims due messages with `FOR UPDATE SKIP LOCKED`, applies bounded quadratic retry backoff, and only records `sent` after provider acceptance. Without SMTP configuration, messages remain safely queued.
 - **Delivery callbacks are append-only.** A shared-secret webhook accepts normalized delivered, bounced, complained, and deferred events. Provider event IDs are unique, making retries idempotent without mutating the immutable reminder record.
 - **External IDs are unique per organization and source.** Retrying an import cannot create a duplicate invoice or payment.
@@ -50,7 +50,8 @@ Go Handler → Service → Repository/GORM ────────► PostgreSQ
 - Zod schemas are the client-side source of truth for form validation; the API independently enforces the same invariants.
 - The worker uses PostgreSQL instead of adding a second queue service before scale requires one.
 - Reminder generation and sync processing share the worker process but use independent services and polling intervals.
-- The QuickBooks feature isolates authorization, provider HTTP calls, encrypted persistence, and UI state behind narrow interfaces without changing queue semantics.
+- The QuickBooks feature isolates authorization, provider HTTP calls, entity mapping, encrypted persistence, CDC, webhook ingestion, and outbound delivery behind narrow interfaces without changing queue semantics.
+- A PostgreSQL transactional outbox couples local client, invoice, and payment commits to eventual QuickBooks delivery; AP entities are inbound-only.
 
 ## API request flow
 
@@ -74,4 +75,4 @@ Interfaces are defined at the consuming boundary. Constructors receive dependenc
 
 ## Production evolution
 
-The portfolio demo uses seeded identities and synchronization data. Passwords use Argon2id, session verifiers are hashed, cookies are HttpOnly and SameSite Strict, and mutations require a CSRF token. Production would enable Secure cookies behind HTTPS, add centralized rate limiting and account recovery, move the OAuth encryption key to a managed KMS, verify QuickBooks webhook signatures, and add PostgreSQL row-level security as defense in depth.
+The portfolio demo uses seeded identities alongside optional live sandbox synchronization. Passwords use Argon2id, session verifiers are hashed, cookies are HttpOnly and SameSite Strict, and mutations require a CSRF token. Production configuration requires Secure cookies behind HTTPS, AWS KMS for OAuth tokens, and the Intuit webhook verifier; infrastructure should additionally restrict the metrics and webhook ingress paths and can add PostgreSQL row-level security as defense in depth.

@@ -6,6 +6,12 @@ export interface SyncRun {
   errorMessage: string | null
   createdAt: string
   finishedAt: string | null
+  entities: Array<{
+    entityType: string
+    status: 'queued' | 'running' | 'succeeded' | 'failed'
+    recordsProcessed: number
+    errorMessage: string | null
+  }>
 }
 
 export interface QuickBooksConnection {
@@ -15,6 +21,14 @@ export interface QuickBooksConnection {
   companyName?: string
   realmId?: string
   connectedAt?: string
+  operations: {
+    scheduleEnabled: boolean
+    nextScheduledAt?: string
+    lastSuccessfulSync?: string
+    pendingWebhooks: number
+    queuedWrites: number
+    failedWrites: number
+  }
 }
 
 export interface QuickBooksAuthorization {

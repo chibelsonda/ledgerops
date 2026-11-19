@@ -27,7 +27,7 @@ const clientProjection = `c.id::text AS id, c.name, c.payment_terms_days, c.remi
 	to_char(c.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS updated_at`
 
 func (r *PostgresRepository) List(ctx context.Context, organizationID string, params ListParams) (Page, error) {
-	base := r.db.WithContext(ctx).Table("clients c").Where("c.organization_id = ?", organizationID)
+	base := r.db.WithContext(ctx).Table("clients c").Where("c.organization_id = ? AND c.source_deleted_at IS NULL", organizationID)
 	if params.Query != "" {
 		like := "%" + params.Query + "%"
 		base = base.Where(`c.name ILIKE ? OR EXISTS(SELECT 1 FROM client_contacts cc WHERE cc.client_id = c.id AND (cc.name ILIKE ? OR cc.email ILIKE ?))`, like, like, like)
@@ -60,6 +60,9 @@ func (r *PostgresRepository) Create(ctx context.Context, organizationID string, 
 		if err := tx.Exec(`INSERT INTO client_contacts (organization_id,client_id,name,email,phone,role_title,is_primary) VALUES (?,?,?,?,NULLIF(?,''),NULLIF(?,''),true)`, organizationID, clientID, contact.Name, contact.Email, contact.Phone, contact.RoleTitle).Error; err != nil {
 			return fmt.Errorf("insert primary contact: %w", err)
 		}
+		if err := enqueueQuickBooksWrite(tx, organizationID, "client", clientID, "create"); err != nil {
+			return err
+		}
 		return clientAudit(tx, organizationID, actor.Email, "client.created", clientID, map[string]any{"name": input.Name})
 	})
 	if err != nil {
@@ -79,6 +82,9 @@ func (r *PostgresRepository) Update(ctx context.Context, organizationID, clientI
 		}
 		if result.RowsAffected == 0 {
 			return apperrors.ErrNotFound
+		}
+		if err := enqueueQuickBooksWrite(tx, organizationID, "client", clientID, "update"); err != nil {
+			return err
 		}
 		return clientAudit(tx, organizationID, actor.Email, "client.updated", clientID, map[string]any{"note": input.AuditNote})
 	})
@@ -188,4 +194,16 @@ func (r *PostgresRepository) getContact(ctx context.Context, organizationID, con
 
 func clientAudit(tx *gorm.DB, organizationID, actor, action, clientID string, metadata map[string]any) error {
 	return audit.Write(tx, organizationID, actor, action, "client", clientID, metadata)
+}
+
+func enqueueQuickBooksWrite(tx *gorm.DB, organizationID, aggregateType, aggregateID, operation string) error {
+	if err := tx.Exec(`INSERT INTO quickbooks_outbox (organization_id, aggregate_type, aggregate_id, operation, idempotency_key)
+		SELECT ?, ?, ?::uuid, ?, concat(?::text, ':', ?::text, ':', ?::uuid::text, ':', txid_current()::text)
+		WHERE EXISTS (SELECT 1 FROM quickbooks_connections WHERE organization_id = ?)
+		AND (? <> 'client' OR EXISTS (SELECT 1 FROM clients WHERE id = ? AND (external_id IS NULL OR external_id LIKE 'quickbooks:customer:%')))`,
+		organizationID, aggregateType, aggregateID, operation, organizationID, operation, aggregateID, organizationID,
+		aggregateType, aggregateID).Error; err != nil {
+		return fmt.Errorf("enqueue QuickBooks %s %s: %w", aggregateType, operation, err)
+	}
+	return nil
 }

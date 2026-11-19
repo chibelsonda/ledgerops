@@ -2,6 +2,8 @@ package jobs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -10,18 +12,23 @@ import (
 
 type Repository interface {
 	ClaimJob(context.Context) (*ledgersync.Job, error)
-	CompleteJob(context.Context, ledgersync.Job) error
-	FailJob(context.Context, ledgersync.Job, error) error
+	CompleteJob(context.Context, ledgersync.Job, int) error
+	FailJob(context.Context, ledgersync.Job, error, bool, time.Duration) error
+}
+
+type Processor interface {
+	Synchronize(context.Context, ledgersync.Job) (int, error)
 }
 
 type Worker struct {
 	repository   Repository
+	processors   map[string]Processor
 	logger       *slog.Logger
 	pollInterval time.Duration
 }
 
-func NewWorker(repository Repository, logger *slog.Logger, pollInterval time.Duration) *Worker {
-	return &Worker{repository: repository, logger: logger, pollInterval: pollInterval}
+func NewWorker(repository Repository, processors map[string]Processor, logger *slog.Logger, pollInterval time.Duration) *Worker {
+	return &Worker{repository: repository, processors: processors, logger: logger, pollInterval: pollInterval}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -50,14 +57,41 @@ func (w *Worker) processOne(ctx context.Context) {
 	}
 	w.logger.Info("processing sync job", "job_id", job.ID, "provider", job.Provider, "attempt", job.Attempts)
 
-	// The portfolio demo synchronizes its seeded QuickBooks-shaped snapshot. A real
-	// QBO client can implement the same boundary without changing queue semantics.
-	if err := w.repository.CompleteJob(ctx, *job); err != nil {
+	processor, exists := w.processors[job.Provider]
+	if !exists {
+		w.fail(ctx, *job, fmt.Errorf("sync provider %q is not configured", job.Provider), false, 0)
+		return
+	}
+	recordsProcessed, err := processor.Synchronize(ctx, *job)
+	if err != nil {
+		retryable, retryAfter := retryPolicy(err)
+		w.fail(ctx, *job, err, retryable, retryAfter)
+		return
+	}
+	if err := w.repository.CompleteJob(ctx, *job, recordsProcessed); err != nil {
 		w.logger.Error("complete sync job", "job_id", job.ID, "error", err)
-		if failErr := w.repository.FailJob(ctx, *job, err); failErr != nil {
+		if failErr := w.repository.FailJob(ctx, *job, err, true, 0); failErr != nil {
 			w.logger.Error("reschedule sync job", "job_id", job.ID, "error", failErr)
 		}
 		return
 	}
-	w.logger.Info("sync job complete", "job_id", job.ID)
+	w.logger.Info("sync job complete", "job_id", job.ID, "records_processed", recordsProcessed)
+}
+
+func (w *Worker) fail(ctx context.Context, job ledgersync.Job, cause error, retryable bool, retryAfter time.Duration) {
+	w.logger.Error("process sync job", "job_id", job.ID, "error", cause, "retryable", retryable)
+	if err := w.repository.FailJob(ctx, job, cause, retryable, retryAfter); err != nil {
+		w.logger.Error("reschedule sync job", "job_id", job.ID, "error", err)
+	}
+}
+
+func retryPolicy(err error) (bool, time.Duration) {
+	var policy interface {
+		Retryable() bool
+		RetryAfter() time.Duration
+	}
+	if errors.As(err, &policy) {
+		return policy.Retryable(), policy.RetryAfter()
+	}
+	return true, 0
 }

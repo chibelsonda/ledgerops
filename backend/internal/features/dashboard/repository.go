@@ -51,12 +51,12 @@ func (r *PostgresRepository) loadMetrics(ctx context.Context, organizationID str
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT
 			(SELECT COALESCE(SUM(paid_minor), 0)::bigint FROM invoice_balances WHERE organization_id = @organization_id)
-				 - (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id) AS cash_position_minor,
+				 - (SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id AND source_deleted_at IS NULL) AS cash_position_minor,
 			(SELECT COALESCE(SUM(b.effective_amount_minor), 0)::bigint FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id WHERE i.organization_id = @organization_id AND i.issued_on >= date_trunc('month', CURRENT_DATE)) AS revenue_mtd_minor,
 			(SELECT COALESCE(SUM(b.outstanding_minor), 0)::bigint
 			 FROM invoices i JOIN invoice_balances b ON b.invoice_id=i.id
 			 WHERE i.organization_id = @organization_id AND i.status IN ('open', 'partial', 'overdue')) AS outstanding_ar_minor,
-			(SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id AND incurred_on >= date_trunc('month', CURRENT_DATE)) AS expenses_mtd_minor,
+			(SELECT COALESCE(SUM(amount_minor), 0)::bigint FROM expenses WHERE organization_id = @organization_id AND source_deleted_at IS NULL AND incurred_on >= date_trunc('month', CURRENT_DATE)) AS expenses_mtd_minor,
 			(SELECT COUNT(*)::int FROM reconciliation_items WHERE organization_id = @organization_id AND status = 'open') AS open_review_count`,
 		sql.Named("organization_id", organizationID),
 	).Scan(metrics).Error
@@ -76,7 +76,7 @@ func (r *PostgresRepository) loadTrend(ctx context.Context, organizationID strin
 			FROM invoices i JOIN invoice_balances b ON b.invoice_id = i.id WHERE i.organization_id = @organization_id GROUP BY 1
 		), spend AS (
 			SELECT date_trunc('month', incurred_on)::date AS month_start, SUM(amount_minor)::bigint AS total
-			FROM expenses WHERE organization_id = @organization_id GROUP BY 1
+			FROM expenses WHERE organization_id = @organization_id AND source_deleted_at IS NULL GROUP BY 1
 		)
 		SELECT to_char(m.month_start, 'Mon') AS month,
 			COALESCE(r.total, 0)::bigint AS revenue_minor,
@@ -94,7 +94,7 @@ func (r *PostgresRepository) loadBudget(ctx context.Context, organizationID stri
 	err := r.db.WithContext(ctx).Raw(`
 		WITH actual AS (
 			SELECT category, SUM(amount_minor)::bigint AS total FROM expenses
-			WHERE organization_id = @organization_id AND incurred_on >= date_trunc('month', CURRENT_DATE) GROUP BY category
+			WHERE organization_id = @organization_id AND source_deleted_at IS NULL AND incurred_on >= date_trunc('month', CURRENT_DATE) GROUP BY category
 		)
 		SELECT b.category, b.amount_minor AS budget_minor,
 			COALESCE(a.total, 0)::bigint AS actual_minor,
