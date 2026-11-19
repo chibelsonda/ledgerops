@@ -107,3 +107,4 @@ The included accounts demonstrate `admin`, `controller`, and `reviewer` workspac
 - [Authentication and role model](docs/authentication.md)
 - [Security and production hardening](docs/security.md)
 - [Financial controls and forecasting methodology](docs/financial-controls.md)
+- [Railway deployment](docs/railway-deployment.md)

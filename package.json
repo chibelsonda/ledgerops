@@ -1,0 +1,11 @@
+{
+  "name": "ledgerops-infrastructure",
+  "private": true,
+  "scripts": {
+    "railway:apply": "railway config apply",
+    "railway:plan": "railway config plan"
+  },
+  "dependencies": {
+    "railway": "3.17.0"
+  }
+}
